@@ -249,8 +249,8 @@ export default function StaffPage() {
     return (
       <main className={styles.authContainer}>
         <form onSubmit={handleLogin} className={styles.authCard}>
-          <h2>Acceso Especialistas</h2>
-          <p>Inicie sesión con su correo para atender pacientes.</p>
+          <h2>Acceso Funcionarios</h2>
+          <p>Inicie sesión con su correo para atender usuarios.</p>
           
           {authError && <div className={styles.errorBanner}>{authError}</div>}
           

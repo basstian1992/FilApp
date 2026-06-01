@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase/client';
-import { collection, query, where, getDocs, doc, setDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc, onSnapshot, updateDoc, orderBy } from 'firebase/firestore';
 import styles from './admin.module.css';
-import { Settings, BarChart3, Users, Clock, AlertTriangle } from 'lucide-react';
+import { Settings, BarChart3, Users, Clock, AlertTriangle, Download } from 'lucide-react';
 
 export default function AdminPage() {
   const [mensajeDia, setMensajeDia] = useState('');
@@ -115,6 +115,91 @@ export default function AdminPage() {
     } catch (e) {
       alert("Error al actualizar");
     }
+  };
+
+  const exportToCSV = (filename: string, rows: any[]) => {
+    if (!rows || !rows.length) {
+      alert("No hay datos para exportar");
+      return;
+    }
+    const separator = ',';
+    const keys = Object.keys(rows[0]);
+    const csvContent =
+      keys.join(separator) +
+      '\n' +
+      rows.map(row => {
+        return keys.map(k => {
+          let cell = row[k] === null || row[k] === undefined ? '' : row[k];
+          cell = cell instanceof Date
+            ? cell.toLocaleString()
+            : cell.toString().replace(/"/g, '""');
+          if (cell.search(/("|,|\n)/g) >= 0) {
+            cell = `"${cell}"`;
+          }
+          return cell;
+        }).join(separator);
+      }).join('\n');
+
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportUsuarios = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'usuarios'));
+      const data = snap.docs.map(d => {
+        const docData = d.data();
+        return {
+          RUT: d.id,
+          Fecha_Ingreso: docData.created_at ? new Date(docData.created_at).toLocaleString() : ''
+        };
+      });
+      exportToCSV('usuarios_filapp.csv', data);
+    } catch (e) {
+      alert("Error exportando usuarios");
+    }
+  };
+
+  const handleExportTurnos = async () => {
+    try {
+      const q = query(collection(db, 'turnos'), orderBy('created_at', 'desc'));
+      const snap = await getDocs(q);
+      const data = snap.docs.map(d => {
+        const t = d.data();
+        return {
+          ID_Turno: d.id,
+          Estado: t.estado,
+          RUT_Usuario: t.usuario_id || '',
+          Departamento: t.departamento || '',
+          Funcionario: t.nombre_funcionario || '',
+          Cargo: t.cargo_funcionario || '',
+          Modulo: t.letra_especialista || '',
+          Creado_En: t.created_at ? new Date(t.created_at).toLocaleString() : '',
+          Llamado_En: t.called_at ? new Date(t.called_at).toLocaleString() : '',
+          Finalizado_En: t.finished_at ? new Date(t.finished_at).toLocaleString() : ''
+        };
+      });
+      exportToCSV('turnos_filapp.csv', data);
+    } catch (e) {
+      alert("Error exportando turnos");
+    }
+  };
+
+  const handleExportFuncionarios = () => {
+    const data = funcionarios.map(f => ({
+      Nombre: f.nombre || '',
+      Departamento: f.departamento || '',
+      Cargo: f.cargo || '',
+      Modulo: f.letra_atencion || ''
+    }));
+    exportToCSV('funcionarios_filapp.csv', data);
   };
 
   if (loading) return <div className={styles.centerLoad}>Cargando panel de administración...</div>;
@@ -297,6 +382,25 @@ export default function AdminPage() {
             )}
           </section>
         </div>
+
+        {/* Sección de Exportación */}
+        <section className={styles.exportSection}>
+          <h2>Reportes y Exportación de Datos</h2>
+          <div className={styles.exportGroup}>
+            <button className={styles.exportBtn} onClick={handleExportUsuarios}>
+              <Download size={20} />
+              Exportar Usuarios (CSV)
+            </button>
+            <button className={styles.exportBtn} onClick={handleExportTurnos}>
+              <Download size={20} />
+              Exportar Turnos e Historial (CSV)
+            </button>
+            <button className={styles.exportBtn} onClick={handleExportFuncionarios}>
+              <Download size={20} />
+              Exportar Funcionarios (CSV)
+            </button>
+          </div>
+        </section>
 
       </main>
     </div>

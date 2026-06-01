@@ -44,7 +44,7 @@ export default function StaffPage() {
 
   const [funcionario, setFuncionario] = useState<Funcionario | null>(null);
   const [currentTurno, setCurrentTurno] = useState<Turno | null>(null);
-  const [queueCount, setQueueCount] = useState(0);
+  const [queueDocs, setQueueDocs] = useState<any[]>([]);
   const [userHistory, setUserHistory] = useState<any[]>([]);
 
   useEffect(() => {
@@ -93,7 +93,9 @@ export default function StaffPage() {
 
   const refreshQueue = async (specId: string) => {
     const qEspera = query(collection(db, 'turnos'), where('estado', '==', 'espera'));
-    onSnapshot(qEspera, (snap) => setQueueCount(snap.size));
+    onSnapshot(qEspera, (snap) => {
+      setQueueDocs(snap.docs.map(d => d.data()));
+    });
 
     const qActivo = query(collection(db, 'turnos'), 
       where('especialista_id', '==', specId),
@@ -209,21 +211,21 @@ export default function StaffPage() {
       return;
     }
 
-    // Buscar turnos en espera solo del departamento del funcionario
-    const qNext = query(collection(db, 'turnos'), 
-      where('estado', '==', 'espera'),
-      where('departamento_solicitado', '==', funcionario.departamento)
-    );
+    // Buscar turnos en espera sin el doble filtro de BD
+    const qNext = query(collection(db, 'turnos'), where('estado', '==', 'espera'));
     const nextSnap = await getDocs(qNext);
+    
+    // Filtrar en cliente
+    const docsList = nextSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+    const esperaDocs = docsList.filter(d => d.departamento_solicitado === funcionario.departamento);
 
-    if (nextSnap.empty) {
+    if (esperaDocs.length === 0) {
       alert("No hay pacientes en espera para " + funcionario.departamento);
       setLoading(false);
       return;
     }
 
     // Ordenar localmente por created_at (del más antiguo al más reciente)
-    const esperaDocs = nextSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
     esperaDocs.sort((a, b) => {
       const timeA = new Date(a.created_at || 0).getTime();
       const timeB = new Date(b.created_at || 0).getTime();
@@ -399,6 +401,8 @@ export default function StaffPage() {
     );
   }
 
+  const queueCount = queueDocs.filter(d => d.departamento_solicitado === funcionario?.departamento).length;
+
   return (
     <div className={styles.dashboardContainer}>
       <header className={styles.topBar}>
@@ -416,18 +420,25 @@ export default function StaffPage() {
               <button className={styles.cancelBtn} onClick={() => setIsEditingAvatar(false)}>X</button>
             </div>
           ) : (
-            <div 
-              className={styles.avatarWrapper} 
-              onClick={() => { setNewAvatarUrl(funcionario?.avatar_url || ''); setIsEditingAvatar(true); }}
-              title="Cambiar Foto"
-            >
-              {funcionario?.avatar_url ? (
-                <img src={funcionario.avatar_url} alt="Avatar" className={styles.avatarImg} />
-              ) : (
-                <div className={styles.avatarPlaceholder}>
-                  {funcionario?.nombre?.substring(0, 2).toUpperCase() || 'FN'}
-                </div>
-              )}
+            <div className={styles.profileCell}>
+              <div 
+                className={styles.avatarWrapper} 
+                onClick={() => { setNewAvatarUrl(funcionario?.avatar_url || ''); setIsEditingAvatar(true); }}
+                title="Cambiar Foto"
+              >
+                {funcionario?.avatar_url ? (
+                  <img src={funcionario.avatar_url} alt="Avatar" className={styles.avatarImg} />
+                ) : (
+                  <div className={styles.avatarPlaceholder}>
+                    {funcionario?.nombre?.substring(0, 2).toUpperCase() || 'FN'}
+                  </div>
+                )}
+              </div>
+              <span 
+                className={styles.statusDot} 
+                data-status={funcionario?.estado_funcionario || 'inactivo'}
+                title={`Estado: ${funcionario?.estado_funcionario || 'inactivo'}`}
+              />
             </div>
           )}
           

@@ -202,9 +202,7 @@
 .bigNumber {
   font-size: 7rem;
   font-weight: 900;
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--primary); /* Cambiado de gradiente a color solido */
   line-height: 1;
   margin: var(--spacing-6) 0;
   text-shadow: 0 10px 30px rgba(37, 99, 235, 0.2);
@@ -505,4 +503,32 @@
   justify-content: center;
   font-weight: bold;
   font-size: 1.2rem;
+}
+
+.profileCell {
+  position: relative;
+  display: inline-block;
+}
+
+.statusDot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--surface-color);
+  background-color: var(--text-secondary); /* inactivo fallback */
+}
+
+.statusDot[data-status="activo"] {
+  background-color: var(--success);
+}
+
+.statusDot[data-status="atendiendo"] {
+  background-color: var(--primary);
+}
+
+.statusDot[data-status="inactivo"] {
+  background-color: var(--destructive);
 }

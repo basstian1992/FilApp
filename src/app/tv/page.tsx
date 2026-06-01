@@ -72,7 +72,7 @@ export default function TVPage() {
     const turnosRef = collection(db, 'turnos');
     const q = query(
       turnosRef, 
-      where('estado', '==', 'llamado')
+      where('estado', 'in', ['llamado', 'atendido'])
     );
 
     // Fetch Llamados sin orderBy
@@ -102,7 +102,7 @@ export default function TVPage() {
         isFirstLoadLlamado.current = false;
       } else {
         snapshot.docChanges().forEach((change) => {
-          if (change.type === 'added') {
+          if ((change.type === 'added' || change.type === 'modified') && change.doc.data().estado === 'llamado') {
             const newTurno = { id: change.doc.id, ...change.doc.data() } as Turno;
             
             // Trigger Audio

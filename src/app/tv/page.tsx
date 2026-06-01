@@ -114,7 +114,33 @@ export default function TVPage() {
             const funcStr = newTurno.nombre_funcionario || 'Funcionario';
             const letraTicketStr = newTurno.letra_ticket ? `${newTurno.letra_ticket} ` : '';
             const textToSpeak = `Turno ${letraTicketStr}${newTurno.numero}, por favor acercarse a módulo ${newTurno.letra_especialista}, con ${funcStr} ${depStr}`;
-            if (audioEnabledRef.current) speak(textToSpeak);
+            
+            if (audioEnabledRef.current) {
+              const playDingAndSpeak = () => {
+                const ding = new Audio('/ding.mp3.mp3');
+                ding.play()
+                  .then(() => {
+                    setTimeout(() => {
+                      speak(textToSpeak);
+                    }, 1200);
+                  })
+                  .catch((err) => {
+                    console.log('Error playing /ding.mp3.mp3, trying fallback /ding.mp3', err);
+                    const fallbackDing = new Audio('/ding.mp3');
+                    fallbackDing.play()
+                      .then(() => {
+                        setTimeout(() => {
+                          speak(textToSpeak);
+                        }, 1200);
+                      })
+                      .catch((err2) => {
+                        console.log('Error playing fallback ding, speaking directly:', err2);
+                        speak(textToSpeak);
+                      });
+                  });
+              };
+              playDingAndSpeak();
+            }
           }
         });
       }

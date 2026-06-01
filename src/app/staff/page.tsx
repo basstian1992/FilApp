@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { db, auth } from '@/lib/firebase/client';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { collection, query, where, getDocs, updateDoc, doc, setDoc, orderBy, limit, onSnapshot } from 'firebase/firestore';
@@ -16,6 +16,8 @@ interface Funcionario {
   estado_funcionario?: string;
   avatar_url?: string;
   letra_atencion: string;
+  whatsapp_phone?: string;
+  whatsapp_apikey?: string;
 }
 
 interface Turno {
@@ -46,6 +48,21 @@ export default function StaffPage() {
   const [currentTurno, setCurrentTurno] = useState<Turno | null>(null);
   const [queueDocs, setQueueDocs] = useState<any[]>([]);
   const [userHistory, setUserHistory] = useState<any[]>([]);
+
+  // WhatsApp states
+  const [whatsappPhone, setWhatsappPhone] = useState('');
+  const [whatsappApikey, setWhatsappApikey] = useState('');
+  const [isSavingWhatsapp, setIsSavingWhatsapp] = useState(false);
+  const [testSent, setTestSent] = useState(false);
+  const [testError, setTestError] = useState('');
+
+  // Refs for tracking changes and bypassing closures in firestore listener
+  const funcionarioRef = useRef<Funcionario | null>(null);
+  const isFirstEspera = useRef(true);
+
+  useEffect(() => {
+    funcionarioRef.current = funcionario;
+  }, [funcionario]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -80,6 +97,8 @@ export default function StaffPage() {
           const specData = { id: specDoc.id, ...specDoc.data() } as Funcionario;
           
           setFuncionario((prev) => ({ ...specData, estado_funcionario: prev?.estado_funcionario || 'activo' }));
+          setWhatsappPhone(specData.whatsapp_phone || '');
+          setWhatsappApikey(specData.whatsapp_apikey || '');
           
           if (!funcionario) {
             // First load for this session
@@ -100,6 +119,40 @@ export default function StaffPage() {
   const refreshQueue = async (specId: string) => {
     const qEspera = query(collection(db, 'turnos'), where('estado', '==', 'espera'));
     onSnapshot(qEspera, (snap) => {
+      const currentFunc = funcionarioRef.current;
+
+      if (isFirstEspera.current) {
+        isFirstEspera.current = false;
+      } else {
+        snap.docChanges().forEach((change) => {
+          if (change.type === 'added') {
+            const newTurno = change.doc.data();
+
+            if (currentFunc && currentFunc.departamento === newTurno.departamento_solicitado) {
+              const allDocs = snap.docs.map(d => d.data());
+              const currentQueueCount = allDocs.filter(d => d.departamento_solicitado === currentFunc.departamento).length;
+
+              if (currentFunc.whatsapp_phone && currentFunc.whatsapp_apikey) {
+                const ticketStr = `${newTurno.letra_ticket || 'T'}-${newTurno.numero}`;
+                const deptoStr = newTurno.departamento_solicitado || currentFunc.departamento;
+
+                const msg = `🔔 *FilApp - Nuevo Turno*\n\nSe ha solicitado un nuevo turno en tu módulo de *${deptoStr}*.\n\n🎫 *Turno:* ${ticketStr}\n👥 *Personas en cola:* ${currentQueueCount}\n\nIngresa al panel para atender.`;
+
+                fetch('/api/whatsapp', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    phone: currentFunc.whatsapp_phone,
+                    apikey: currentFunc.whatsapp_apikey,
+                    message: msg
+                  })
+                }).catch(err => console.error('Error al enviar WhatsApp:', err));
+              }
+            }
+          }
+        });
+      }
+
       setQueueDocs(snap.docs.map(d => d.data()));
     });
 
@@ -202,6 +255,85 @@ export default function StaffPage() {
       alert('Error al actualizar avatar');
     }
     setLoading(false);
+  };
+
+  const handleLinkWhatsapp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!funcionario || !whatsappPhone.trim() || !whatsappApikey.trim()) return;
+
+    setIsSavingWhatsapp(true);
+    setTestSent(false);
+    setTestError('');
+
+    const formattedPhone = whatsappPhone.replace(/[^0-9]/g, '');
+    const testMsg = `📲 *¡FilApp Conectado!*\n\nHola ${funcionario.nombre}, tu WhatsApp se ha vinculado correctamente a FilApp.\n\nRecibirás una notificación en este chat cada vez que ingresen turnos en espera para *${funcionario.departamento}*.\n\n_Este servicio estará activo mientras mantengas tu panel abierto._`;
+
+    try {
+      // 1. Send test message via API to verify it works
+      const res = await fetch('/api/whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: formattedPhone,
+          apikey: whatsappApikey.trim(),
+          message: testMsg
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Error al conectar con la API de CallMeBot');
+      }
+
+      // 2. Save credentials to Firestore
+      await updateDoc(doc(db, 'especialistas', funcionario.id), {
+        whatsapp_phone: formattedPhone,
+        whatsapp_apikey: whatsappApikey.trim()
+      });
+
+      // 3. Update local state
+      setFuncionario({
+        ...funcionario,
+        whatsapp_phone: formattedPhone,
+        whatsapp_apikey: whatsappApikey.trim()
+      });
+
+      setTestSent(true);
+    } catch (err: any) {
+      console.error('Error al vincular WhatsApp:', err);
+      setTestError(err.message || 'No se pudo conectar. Por favor verifica tus credenciales.');
+    } finally {
+      setIsSavingWhatsapp(false);
+    }
+  };
+
+  const handleUnlinkWhatsapp = async () => {
+    if (!funcionario) return;
+
+    setIsSavingWhatsapp(true);
+    try {
+      await updateDoc(doc(db, 'especialistas', funcionario.id), {
+        whatsapp_phone: '',
+        whatsapp_apikey: ''
+      });
+
+      setFuncionario({
+        ...funcionario,
+        whatsapp_phone: '',
+        whatsapp_apikey: ''
+      });
+
+      setWhatsappPhone('');
+      setWhatsappApikey('');
+      setTestSent(false);
+      setTestError('');
+    } catch (err) {
+      console.error('Error al desvincular WhatsApp:', err);
+      alert('Error al desvincular.');
+    } finally {
+      setIsSavingWhatsapp(false);
+    }
   };
 
   const llamarSiguiente = async () => {
@@ -513,6 +645,88 @@ export default function StaffPage() {
             >
               <Megaphone size={24} /> Llamar Siguiente
             </button>
+          </div>
+
+          {/* Tarjeta de Configuración de WhatsApp */}
+          <div className={styles.whatsappCard}>
+            <h3>📲 Notificaciones de WhatsApp</h3>
+            
+            {funcionario?.whatsapp_phone && funcionario?.whatsapp_apikey ? (
+              <div className={styles.waConnectedState}>
+                <div className={styles.waBadge}>
+                  <span className={styles.waActiveDot} /> Conectado a WhatsApp
+                </div>
+                <p className={styles.waMeta}>
+                  <strong>Número:</strong> +{funcionario.whatsapp_phone}
+                </p>
+                <p className={styles.waInstructionText}>
+                  Recibirás alertas en tiempo real en tu teléfono cuando lleguen turnos de <strong>{funcionario.departamento}</strong>.
+                </p>
+                <button 
+                  onClick={handleUnlinkWhatsapp} 
+                  className={styles.waDisconnectBtn}
+                  disabled={isSavingWhatsapp}
+                >
+                  Desconectar WhatsApp
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleLinkWhatsapp} className={styles.waForm}>
+                <p className={styles.waDescription}>
+                  Recibe notificaciones automáticas en tu celular cuando haya turnos en espera para tu módulo.
+                </p>
+                
+                <div className={styles.waSteps}>
+                  <h4>Instrucción rápida:</h4>
+                  <ol>
+                    <li>
+                      Guarda a <strong>CallMeBot</strong> en tus contactos de WhatsApp: <a href="https://wa.me/34621096809" target="_blank" rel="noreferrer"><strong>+34 621 09 68 09</strong></a>.
+                    </li>
+                    <li>
+                      Envía un mensaje con el texto: <code className={styles.code}>I allow callmebot to send me messages</code>
+                    </li>
+                    <li>
+                      Recibirás tu <strong>API Key</strong> de 6 dígitos. Ingrésala aquí abajo con tu número:
+                    </li>
+                  </ol>
+                </div>
+
+                {testError && <div className={styles.waError}>{testError}</div>}
+                {testSent && <div className={styles.waSuccess}>¡Vinculado con éxito! Revisa tu WhatsApp para confirmar.</div>}
+
+                <div className={styles.waInputGroup}>
+                  <label>Número (con código de país, ej. +56912345678)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ej: +56912345678" 
+                    value={whatsappPhone}
+                    onChange={e => setWhatsappPhone(e.target.value)}
+                    required 
+                    disabled={isSavingWhatsapp}
+                  />
+                </div>
+
+                <div className={styles.waInputGroup}>
+                  <label>API Key de CallMeBot</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ej: 123456" 
+                    value={whatsappApikey}
+                    onChange={e => setWhatsappApikey(e.target.value)}
+                    required 
+                    disabled={isSavingWhatsapp}
+                  />
+                </div>
+
+                <button 
+                  type="submit" 
+                  className={styles.waConnectBtn}
+                  disabled={isSavingWhatsapp || !whatsappPhone.trim() || !whatsappApikey.trim()}
+                >
+                  {isSavingWhatsapp ? 'Vinculando...' : 'Vincular y Probar'}
+                </button>
+              </form>
+            )}
           </div>
         </div>
 

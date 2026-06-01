@@ -532,3 +532,222 @@
 .statusDot[data-status="inactivo"] {
   background-color: var(--destructive);
 }
+
+/* WhatsApp Alertas Card */
+.whatsappCard {
+  background: rgba(30, 41, 59, 0.4);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
+  margin-top: var(--spacing-6);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  position: relative;
+  overflow: hidden;
+}
+
+.whatsappCard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, #25d366, #128c7e);
+}
+
+.whatsappCard h3 {
+  color: var(--text-primary);
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.waConnectedState {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
+  background: rgba(37, 211, 102, 0.06);
+  border: 1px solid rgba(37, 211, 102, 0.15);
+  border-radius: var(--radius-lg);
+}
+
+.waBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  color: #25d366;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.waActiveDot {
+  width: 10px;
+  height: 10px;
+  background-color: #25d366;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #25d366;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(37, 211, 102, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 211, 102, 0); }
+}
+
+.waMeta {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.waInstructionText {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.waDisconnectBtn {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--destructive);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-md);
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.waDisconnectBtn:hover {
+  background: var(--destructive);
+  color: white;
+}
+
+.waForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.waDescription {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.waSteps {
+  background: rgba(0, 0, 0, 0.15);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+}
+
+.waSteps h4 {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  margin-top: 0;
+  margin-bottom: var(--spacing-2);
+}
+
+.waSteps ol {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  padding-left: var(--spacing-4);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.waSteps li a {
+  color: #25d366;
+  text-decoration: underline;
+}
+
+.code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--accent);
+}
+
+.waInputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.waInputGroup label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.waInputGroup input {
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.03);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.waInputGroup input:focus {
+  outline: none;
+  border-color: #25d366;
+  box-shadow: 0 0 0 2px rgba(37, 211, 102, 0.2);
+}
+
+.waConnectBtn {
+  background: linear-gradient(135deg, #25d366, #128c7e);
+  color: white;
+  padding: var(--spacing-3);
+  border-radius: var(--radius-md);
+  font-weight: bold;
+  border: none;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
+}
+
+.waConnectBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(37, 211, 102, 0.45);
+}
+
+.waConnectBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.waError {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--destructive);
+  padding: var(--spacing-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--destructive);
+  font-size: 0.8rem;
+}
+
+.waSuccess {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  padding: var(--spacing-3);
+  border-radius: var(--radius-md);
+  border: 1px solid #10b981;
+  font-size: 0.8rem;
+}

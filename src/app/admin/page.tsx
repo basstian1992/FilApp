@@ -303,6 +303,7 @@ export default function AdminPage() {
                   <table className={styles.table}>
                     <thead>
                       <tr>
+                        <th style={{width: '100px'}}>Perfil</th>
                         <th>Nombre</th>
                         <th>Cargo o Función</th>
                         <th>Módulo</th>
@@ -311,6 +312,24 @@ export default function AdminPage() {
                     <tbody>
                       {funcs.map(f => (
                         <tr key={f.id}>
+                          <td>
+                            <div className={styles.adminProfileCell}>
+                              <div className={styles.adminAvatarWrapper}>
+                                {f.avatar_url ? (
+                                  <img src={f.avatar_url} alt="Avatar" className={styles.adminAvatarImg} />
+                                ) : (
+                                  <div className={styles.adminAvatarPlaceholder}>
+                                    {f.nombre?.substring(0, 2).toUpperCase() || 'FN'}
+                                  </div>
+                                )}
+                              </div>
+                              <span 
+                                className={styles.statusDot} 
+                                data-status={f.estado_funcionario || 'inactivo'}
+                                title={`Estado: ${f.estado_funcionario || 'inactivo'}`}
+                              />
+                            </div>
+                          </td>
                           <td>
                             <input 
                               className={styles.tableInput}
@@ -338,7 +357,7 @@ export default function AdminPage() {
                         </tr>
                       ))}
                       {funcs.length === 0 && (
-                        <tr><td colSpan={3}>Sin funcionarios registrados en este departamento.</td></tr>
+                        <tr><td colSpan={4}>Sin funcionarios registrados en este departamento.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -353,6 +372,7 @@ export default function AdminPage() {
                 <table className={styles.table}>
                   <thead>
                     <tr>
+                      <th style={{width: '100px'}}>Perfil</th>
                       <th>Nombre</th>
                       <th>Cargo o Función</th>
                       <th>Departamento Actual</th>
@@ -362,6 +382,24 @@ export default function AdminPage() {
                   <tbody>
                     {funcionarios.filter(f => !departamentosStr.split(',').map(s => s.trim()).includes(f.departamento)).map(f => (
                       <tr key={f.id}>
+                        <td>
+                          <div className={styles.adminProfileCell}>
+                            <div className={styles.adminAvatarWrapper}>
+                              {f.avatar_url ? (
+                                <img src={f.avatar_url} alt="Avatar" className={styles.adminAvatarImg} />
+                              ) : (
+                                <div className={styles.adminAvatarPlaceholder}>
+                                  {f.nombre?.substring(0, 2).toUpperCase() || 'FN'}
+                                </div>
+                              )}
+                            </div>
+                            <span 
+                              className={styles.statusDot} 
+                              data-status={f.estado_funcionario || 'inactivo'}
+                              title={`Estado: ${f.estado_funcionario || 'inactivo'}`}
+                            />
+                          </div>
+                        </td>
                         <td>
                           <input className={styles.tableInput} value={f.nombre || ''} onChange={e => updateFuncionario(f.id, 'nombre', e.target.value)} />
                         </td>

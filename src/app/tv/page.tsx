@@ -84,6 +84,10 @@ export default function TVPage() {
       
       setTurnos(fetchedTurnos);
       
+      if (fetchedTurnos.length > 0) {
+        setCurrentCall(fetchedTurnos[0]);
+      }
+      
       // Check for newly added 'llamado' in this snapshot to trigger TTS
       if (isFirstLoadLlamado.current) {
         isFirstLoadLlamado.current = false;
@@ -91,7 +95,6 @@ export default function TVPage() {
         snapshot.docChanges().forEach((change) => {
           if (change.type === 'added') {
             const newTurno = { id: change.doc.id, ...change.doc.data() } as Turno;
-            setCurrentCall(newTurno);
             
             // Trigger Audio
             let depStr = newTurno.departamento ? `de ${newTurno.departamento}` : '';
@@ -100,11 +103,6 @@ export default function TVPage() {
             if (audioEnabledRef.current) speak(textToSpeak);
           }
         });
-      }
-      
-      // Set current call if array is not empty and no new ones were added
-      if (fetchedTurnos.length > 0 && !snapshot.docChanges().some(c => c.type === 'added')) {
-        setCurrentCall(fetchedTurnos[0]);
       }
     });
 

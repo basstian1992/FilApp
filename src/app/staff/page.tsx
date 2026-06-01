@@ -13,6 +13,8 @@ interface Funcionario {
   nombre: string;
   departamento: string;
   cargo?: string;
+  estado_funcionario?: string;
+  avatar_url?: string;
   letra_atencion: string;
 }
 
@@ -33,8 +35,9 @@ export default function StaffPage() {
   const [letraAtencion, setLetraAtencion] = useState('');
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState('');
-  const [isEditingLetra, setIsEditingLetra] = useState(false);
   const [newLetra, setNewLetra] = useState('');
+  const [isEditingAvatar, setIsEditingAvatar] = useState(false);
+  const [newAvatarUrl, setNewAvatarUrl] = useState('');
   const [departamentosDisponibles, setDepartamentosDisponibles] = useState<string[]>(['DIDECO', 'OMIL', 'PRODESAL', 'PMJH', 'FOMENTO', 'OTEC', 'TURISMO', 'OTRO']);
 
   const [funcionario, setFuncionario] = useState<Funcionario | null>(null);
@@ -71,9 +74,10 @@ export default function StaffPage() {
       const querySnapshot = await getDocs(q);
       
       if (!querySnapshot.empty) {
-        const specDoc = querySnapshot.docs[0];
         const specData = { id: specDoc.id, ...specDoc.data() } as Funcionario;
         setFuncionario(specData);
+        // Actualizar estado a activo al iniciar sesión
+        await updateDoc(doc(db, 'especialistas', specData.id), { estado_funcionario: 'activo' });
         await refreshQueue(specData.id);
       } else {
         setLoading(false);
@@ -134,6 +138,8 @@ export default function StaffPage() {
             nombre: nombre || 'Funcionario Nuevo',
             departamento: departamento,
             cargo: cargo || 'Funcionario',
+            estado_funcionario: 'activo',
+            avatar_url: '',
             letra_atencion: letraAtencion || email.split('@')[0].toUpperCase().substring(0,2)
           });
           // La sesión se actualizará sola por el onAuthStateChanged
@@ -153,6 +159,11 @@ export default function StaffPage() {
   };
 
   const handleLogout = async () => {
+    if (funcionario) {
+      try {
+        await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'inactivo' });
+      } catch (e) {}
+    }
     await signOut(auth);
   };
 
@@ -170,6 +181,20 @@ export default function StaffPage() {
     setLoading(false);
   };
 
+  const handleUpdateAvatar = async () => {
+    if (!funcionario) return;
+    setLoading(true);
+    try {
+      await updateDoc(doc(db, 'especialistas', funcionario.id), { avatar_url: newAvatarUrl.trim() });
+      setFuncionario({ ...funcionario, avatar_url: newAvatarUrl.trim() });
+      setIsEditingAvatar(false);
+    } catch (e) {
+      console.error(e);
+      alert('Error al actualizar avatar');
+    }
+    setLoading(false);
+  };
+
   const llamarSiguiente = async () => {
     if (!funcionario) return;
     setLoading(true);
@@ -181,8 +206,8 @@ export default function StaffPage() {
       return;
     }
 
-    // Buscar el turno más antiguo en espera
-    const qNext = query(collection(db, 'turnos'), where('estado', '==', 'espera'), orderBy('created_at', 'asc'), limit(1));
+    // Buscar turnos en espera sin ordenar en Firebase para evitar error de índice
+    const qNext = query(collection(db, 'turnos'), where('estado', '==', 'espera'));
     const nextSnap = await getDocs(qNext);
 
     if (nextSnap.empty) {
@@ -191,7 +216,15 @@ export default function StaffPage() {
       return;
     }
 
-    const nextTurnoDoc = nextSnap.docs[0];
+    // Ordenar localmente por created_at (del más antiguo al más reciente)
+    const esperaDocs = nextSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+    esperaDocs.sort((a, b) => {
+      const timeA = new Date(a.created_at || 0).getTime();
+      const timeB = new Date(b.created_at || 0).getTime();
+      return timeA - timeB;
+    });
+
+    const nextTurnoDoc = esperaDocs[0];
 
     // Actualizar estado a 'llamado'
     await updateDoc(doc(db, 'turnos', nextTurnoDoc.id), { 
@@ -204,10 +237,12 @@ export default function StaffPage() {
         called_at: new Date().toISOString()
     });
     
+    await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'atendiendo' });
+    
     // Notificar a n8n
     triggerWebhook('llamado', {
-        numero: nextTurnoDoc.data().numero,
-        rut_usuario: nextTurnoDoc.data().rut_usuario,
+        numero: nextTurnoDoc.numero,
+        rut_usuario: nextTurnoDoc.rut_usuario,
         especialista_id: funcionario.id,
         nombre_funcionario: funcionario.nombre || 'Funcionario',
         departamento: funcionario.departamento || '',
@@ -226,6 +261,8 @@ export default function StaffPage() {
         finished_at: new Date().toISOString()
     });
       
+    await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'activo' });
+      
     await refreshQueue(funcionario.id);
     setLoading(false);
   };
@@ -234,6 +271,8 @@ export default function StaffPage() {
     if (!currentTurno || !funcionario) return;
     setLoading(true);
     await updateDoc(doc(db, 'turnos', currentTurno.id), { estado: 'saltado' });
+      
+    await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'activo' });
       
     await refreshQueue(funcionario.id);
     setLoading(false);
@@ -295,7 +334,34 @@ export default function StaffPage() {
     <div className={styles.dashboardContainer}>
       <header className={styles.topBar}>
         <div className={styles.userInfo}>
-          <User className={styles.icon} />
+          {isEditingAvatar ? (
+            <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+              <input 
+                className={styles.editInput}
+                value={newAvatarUrl} 
+                onChange={e => setNewAvatarUrl(e.target.value)} 
+                placeholder="URL de tu foto..."
+                autoFocus
+              />
+              <button className={styles.saveBtn} onClick={handleUpdateAvatar}>Guardar</button>
+              <button className={styles.cancelBtn} onClick={() => setIsEditingAvatar(false)}>X</button>
+            </div>
+          ) : (
+            <div 
+              className={styles.avatarWrapper} 
+              onClick={() => { setNewAvatarUrl(funcionario?.avatar_url || ''); setIsEditingAvatar(true); }}
+              title="Cambiar Foto"
+            >
+              {funcionario?.avatar_url ? (
+                <img src={funcionario.avatar_url} alt="Avatar" className={styles.avatarImg} />
+              ) : (
+                <div className={styles.avatarPlaceholder}>
+                  {funcionario?.nombre?.substring(0, 2).toUpperCase() || 'FN'}
+                </div>
+              )}
+            </div>
+          )}
+          
           <div>
             <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
               {isEditingLetra ? (

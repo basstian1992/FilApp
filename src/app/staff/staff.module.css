@@ -173,39 +173,72 @@
 }
 
 .statCard {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
+  background: rgba(30, 41, 59, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-xl);
-  padding: var(--spacing-6);
+  padding: var(--spacing-8);
   text-align: center;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.statCard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 4px;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
 }
 
 .statCard h3 {
   color: var(--text-secondary);
   font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
 
 .bigNumber {
-  font-size: 6rem;
+  font-size: 7rem;
   font-weight: 900;
-  color: var(--primary);
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   line-height: 1;
-  margin: var(--spacing-4) 0;
+  margin: var(--spacing-6) 0;
+  text-shadow: 0 10px 30px rgba(37, 99, 235, 0.2);
 }
 
 .actionBtn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-2);
+  gap: var(--spacing-3);
   width: 100%;
   padding: var(--spacing-4);
   border-radius: var(--radius-lg);
   font-size: 1.25rem;
   font-weight: bold;
   color: white;
-  transition: transform 0.2s, opacity 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: none;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.actionBtn::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(rgba(255,255,255,0.1), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.actionBtn:hover::after {
+  opacity: 1;
 }
 
 .actionBtn:active:not(:disabled) {
@@ -215,42 +248,70 @@
 .actionBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none !important;
 }
 
-.btnCall { background: var(--primary); }
-.btnCall:hover:not(:disabled) { background: var(--primary-hover); }
+.btnCall { 
+  background: linear-gradient(135deg, var(--primary), #3b82f6); 
+  box-shadow: 0 8px 25px -5px rgba(37, 99, 235, 0.5);
+}
+.btnCall:hover:not(:disabled) { 
+  box-shadow: 0 12px 30px -5px rgba(37, 99, 235, 0.6);
+  transform: translateY(-2px);
+}
 
-.btnFinish { background: var(--success); }
-.btnSkip { background: var(--text-secondary); }
+.btnFinish { 
+  background: linear-gradient(135deg, var(--success), #10b981); 
+  box-shadow: 0 8px 25px -5px rgba(16, 185, 129, 0.4);
+}
+.btnFinish:hover:not(:disabled) {
+  box-shadow: 0 12px 30px -5px rgba(16, 185, 129, 0.5);
+  transform: translateY(-2px);
+}
+
+.btnSkip { 
+  background: var(--surface-hover); 
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+.btnSkip:hover:not(:disabled) {
+  background: var(--border-color);
+}
 
 /* Active Turno */
 .activeTurnoCard {
-  background: var(--surface-color);
-  border: 2px solid var(--primary);
+  background: rgba(30, 41, 59, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-xl);
   padding: var(--spacing-8);
   height: 100%;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.3);
 }
 
 .activeTurnoCard h2 {
   color: var(--primary);
-  margin-bottom: var(--spacing-6);
+  margin-bottom: var(--spacing-2);
+  font-size: 1.75rem;
 }
 
 .turnoDisplay {
-  font-size: 4rem;
+  font-size: 5rem;
   font-weight: 900;
   color: var(--text-primary);
+  letter-spacing: -2px;
 }
 
 .patientInfo {
   margin-top: var(--spacing-4);
-  padding: var(--spacing-4);
-  background: var(--surface-hover);
-  border-radius: var(--radius-md);
+  padding: var(--spacing-6);
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-lg);
   font-size: 1.25rem;
+  border-left: 4px solid var(--primary);
 }
 
 .actionGrid {
@@ -261,8 +322,9 @@
 }
 
 .emptyStateCard {
-  background: var(--surface-color);
-  border: 1px dashed var(--border-color);
+  background: rgba(30, 41, 59, 0.3);
+  backdrop-filter: blur(8px);
+  border: 2px dashed rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-xl);
   height: 100%;
   display: flex;
@@ -270,17 +332,48 @@
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
+  transition: all 0.3s;
+}
+
+.emptyStateCard:hover {
+  border-color: rgba(37, 99, 235, 0.3);
+  background: rgba(30, 41, 59, 0.5);
 }
 
 .emptyCircle {
-  width: 100px;
-  height: 100px;
+  width: 120px;
+  height: 120px;
   border-radius: 50%;
-  background: var(--surface-hover);
+  background: rgba(0, 0, 0, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
+  box-shadow: inset 0 4px 20px rgba(0,0,0,0.2);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+}
+
+.exportBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  font-weight: 600;
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-md);
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.exportBtn:hover {
+  background: rgba(16, 185, 129, 0.2);
 }
 
 .emptyStateCard h3 {

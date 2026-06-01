@@ -29,7 +29,7 @@ export default function TotemPage() {
   const [ticket, setTicket] = useState<{ numero: number, letra_ticket: string, departamento: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   
-  const [departamentos, setDepartamentos] = useState<string[]>(['DIDECO', 'OMIL', 'PRODESAL', 'PMJH']);
+  const [departamentos, setDepartamentos] = useState<string[]>(['DIDECO', 'OMIL', 'PRODESAL', 'P.M. Jefas de Hogar', 'Turismo', 'OTEC', 'Fomento', 'Otro']);
   const [selectedDepto, setSelectedDepto] = useState<string | null>(null);
 
   useEffect(() => {

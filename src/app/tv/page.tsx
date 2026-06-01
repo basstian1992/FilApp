@@ -15,6 +15,7 @@ interface Turno {
   letra_ticket?: string;
   estado: string;
   created_at?: string;
+  called_at?: string;
 }
 
 export default function TVPage() {
@@ -71,22 +72,29 @@ export default function TVPage() {
     const turnosRef = collection(db, 'turnos');
     const q = query(
       turnosRef, 
-      where('estado', '==', 'llamado'), 
-      orderBy('called_at', 'desc'), 
-      limit(5)
+      where('estado', '==', 'llamado')
     );
 
-    // Fetch Llamados
+    // Fetch Llamados sin orderBy
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedTurnos: Turno[] = [];
       snapshot.forEach((doc) => {
         fetchedTurnos.push({ id: doc.id, ...doc.data() } as Turno);
       });
       
-      setTurnos(fetchedTurnos);
+      // Ordenar localmente por called_at desc (mas reciente primero)
+      fetchedTurnos.sort((a, b) => {
+        const timeA = new Date(a.called_at || 0).getTime();
+        const timeB = new Date(b.called_at || 0).getTime();
+        return timeB - timeA;
+      });
       
-      if (fetchedTurnos.length > 0) {
-        setCurrentCall(fetchedTurnos[0]);
+      const latestTurnos = fetchedTurnos.slice(0, 6); // current + 5 history
+      
+      setTurnos(latestTurnos);
+      
+      if (latestTurnos.length > 0) {
+        setCurrentCall(latestTurnos[0]);
       }
       
       // Check for newly added 'llamado' in this snapshot to trigger TTS

@@ -8,7 +8,7 @@ import { Settings, BarChart3, Users, Clock, AlertTriangle, Download } from 'luci
 
 export default function AdminPage() {
   const [mensajeDia, setMensajeDia] = useState('');
-  const [departamentosStr, setDepartamentosStr] = useState('DIDECO, OMIL, PRODESAL, PMJH, FOMENTO, OTEC, TURISMO, OTRO');
+  const [departamentosStr, setDepartamentosStr] = useState('DIDECO, OMIL, PRODESAL, P.M. Jefas de Hogar, Turismo, OTEC, Fomento, Otro');
   const [webhookUrl, setWebhookUrl] = useState('');
   const [savingConfig, setSavingConfig] = useState(false);
   const [stats, setStats] = useState({

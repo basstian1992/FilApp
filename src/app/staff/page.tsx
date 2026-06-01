@@ -6,7 +6,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndP
 import { collection, query, where, getDocs, updateDoc, doc, setDoc, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { triggerWebhook } from '@/lib/notify';
 import styles from './staff.module.css';
-import { LogOut, User, CheckCircle, SkipForward, Megaphone } from 'lucide-react';
+import { LogOut, User, CheckCircle, SkipForward, Megaphone, Download } from 'lucide-react';
 
 interface Funcionario {
   id: string;
@@ -40,7 +40,7 @@ export default function StaffPage() {
   const [newLetra, setNewLetra] = useState('');
   const [isEditingAvatar, setIsEditingAvatar] = useState(false);
   const [newAvatarUrl, setNewAvatarUrl] = useState('');
-  const [departamentosDisponibles, setDepartamentosDisponibles] = useState<string[]>(['DIDECO', 'OMIL', 'PRODESAL', 'PMJH', 'FOMENTO', 'OTEC', 'TURISMO', 'OTRO']);
+  const [departamentosDisponibles, setDepartamentosDisponibles] = useState<string[]>(['DIDECO', 'OMIL', 'PRODESAL', 'P.M. Jefas de Hogar', 'Turismo', 'OTEC', 'Fomento', 'Otro']);
 
   const [funcionario, setFuncionario] = useState<Funcionario | null>(null);
   const [currentTurno, setCurrentTurno] = useState<Turno | null>(null);
@@ -284,6 +284,69 @@ export default function StaffPage() {
     setLoading(false);
   };
 
+  const exportToCSV = (filename: string, rows: any[]) => {
+    if (!rows || !rows.length) {
+      alert("No hay datos para exportar");
+      return;
+    }
+    const separator = ',';
+    const keys = Object.keys(rows[0]);
+    const csvContent =
+      keys.join(separator) +
+      '\n' +
+      rows.map(row => {
+        return keys.map(k => {
+          let cell = row[k] === null || row[k] === undefined ? '' : row[k];
+          cell = cell instanceof Date
+            ? cell.toLocaleString()
+            : cell.toString().replace(/"/g, '""');
+          if (cell.search(/("|,|\n)/g) >= 0) {
+            cell = `"${cell}"`;
+          }
+          return cell;
+        }).join(separator);
+      }).join('\n');
+
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportMyHistory = async () => {
+    if (!funcionario) return;
+    setLoading(true);
+    try {
+      const q = query(
+        collection(db, 'turnos'), 
+        where('especialista_id', '==', funcionario.id),
+        where('estado', '==', 'atendido'),
+        orderBy('finished_at', 'desc')
+      );
+      const snap = await getDocs(q);
+      const data = snap.docs.map(d => {
+        const t = d.data();
+        return {
+          ID_Turno: d.id,
+          Turno_Visual: `${t.letra_ticket ? t.letra_ticket + '-' : ''}${t.numero}`,
+          RUT_Usuario: t.rut_usuario || '',
+          Fecha_Atencion: t.finished_at ? new Date(t.finished_at).toLocaleString() : '',
+          Llamado_En: t.called_at ? new Date(t.called_at).toLocaleString() : ''
+        };
+      });
+      exportToCSV(`atenciones_${funcionario.nombre.replace(/\s+/g, '_')}.csv`, data);
+    } catch (e) {
+      console.error(e);
+      alert("Error al exportar");
+    }
+    setLoading(false);
+  };
+
   // --- RENDERS ---
 
   if (loading && !session && !authError) {
@@ -397,9 +460,14 @@ export default function StaffPage() {
             <span>{funcionario?.cargo ? `${funcionario.cargo} en ` : ''}{funcionario?.departamento} | {session?.email}</span>
           </div>
         </div>
-        <button onClick={handleLogout} className={styles.logoutBtn}>
-          <LogOut size={18} /> Salir
-        </button>
+        <div className={styles.headerActions}>
+          <button onClick={handleExportMyHistory} className={styles.exportBtn} title="Descargar mi historial">
+            <Download size={18} /> Exportar
+          </button>
+          <button onClick={handleLogout} className={styles.logoutBtn}>
+            <LogOut size={18} /> Salir
+          </button>
+        </div>
       </header>
 
       <div className={styles.mainLayout}>

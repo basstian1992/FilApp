@@ -70,31 +70,35 @@ export default function TVPage() {
     });
 
     const turnosRef = collection(db, 'turnos');
-    const q = query(
-      turnosRef, 
-      where('estado', 'in', ['llamado', 'atendido'])
-    );
+    const q = query(turnosRef);
 
-    // Fetch Llamados sin orderBy
+    // Fetch ALL turnos and filter locally to bypass index errors
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedTurnos: Turno[] = [];
+      const allTurnos: Turno[] = [];
       snapshot.forEach((doc) => {
-        fetchedTurnos.push({ id: doc.id, ...doc.data() } as Turno);
+        allTurnos.push({ id: doc.id, ...doc.data() } as Turno);
       });
       
+      const calledTurnos = allTurnos.filter(t => t.estado === 'llamado' || t.estado === 'atendido');
+      
       // Ordenar localmente por called_at desc (mas reciente primero)
-      fetchedTurnos.sort((a, b) => {
+      calledTurnos.sort((a, b) => {
         const timeA = new Date(a.called_at || 0).getTime();
         const timeB = new Date(b.called_at || 0).getTime();
         return timeB - timeA;
       });
       
-      const latestTurnos = fetchedTurnos.slice(0, 6); // current + 5 history
+      const latestTurnos = calledTurnos.slice(0, 6); // current + 5 history
       
+      // The currently active turn should be the one in 'llamado' state.
+      // Since it's sorted by called_at desc, if the most recent is 'llamado', it's the current call.
+      const firstIsLlamado = latestTurnos.length > 0 && latestTurnos[0].estado === 'llamado';
       setTurnos(latestTurnos);
       
-      if (latestTurnos.length > 0) {
+      if (firstIsLlamado) {
         setCurrentCall(latestTurnos[0]);
+      } else {
+        setCurrentCall(null);
       }
       
       // Check for newly added 'llamado' in this snapshot to trigger TTS

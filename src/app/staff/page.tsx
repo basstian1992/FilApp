@@ -72,19 +72,25 @@ export default function StaffPage() {
 
   const fetchFuncionarioData = async (userId: string) => {
     try {
+      // Use onSnapshot to avoid race conditions when creating new accounts
       const q = query(collection(db, 'especialistas'), where('user_id', '==', userId));
-      const querySnapshot = await getDocs(q);
-      
-      if (!querySnapshot.empty) {
-        const specDoc = querySnapshot.docs[0];
-        const specData = { id: specDoc.id, ...specDoc.data() } as Funcionario;
-        setFuncionario(specData);
-        // Actualizar estado a activo al iniciar sesión
-        await updateDoc(doc(db, 'especialistas', specData.id), { estado_funcionario: 'activo' });
-        await refreshQueue(specData.id);
-      } else {
-        setLoading(false);
-      }
+      onSnapshot(q, async (querySnapshot) => {
+        if (!querySnapshot.empty) {
+          const specDoc = querySnapshot.docs[0];
+          const specData = { id: specDoc.id, ...specDoc.data() } as Funcionario;
+          
+          setFuncionario((prev) => ({ ...specData, estado_funcionario: prev?.estado_funcionario || 'activo' }));
+          
+          if (!funcionario) {
+            // First load for this session
+            await updateDoc(doc(db, 'especialistas', specData.id), { estado_funcionario: 'activo' });
+            await refreshQueue(specData.id);
+          }
+          setLoading(false);
+        } else {
+          // Keep loading if we expect it to be created shortly, or timeout
+        }
+      });
     } catch (e) {
       console.error(e);
       setLoading(false);
@@ -97,18 +103,16 @@ export default function StaffPage() {
       setQueueDocs(snap.docs.map(d => d.data()));
     });
 
-    const qActivo = query(collection(db, 'turnos'), 
-      where('especialista_id', '==', specId),
-      where('estado', '==', 'llamado')
-    );
+    const qActivo = query(collection(db, 'turnos'), where('especialista_id', '==', specId));
     onSnapshot(qActivo, async (snap) => {
-      if (!snap.empty) {
-        const docSnap = snap.docs[0];
-        const currentData = { id: docSnap.id, ...docSnap.data() } as Turno;
-        setCurrentTurno(currentData);
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Turno));
+      const activo = docs.find(d => d.estado === 'llamado');
+      
+      if (activo) {
+        setCurrentTurno(activo);
         
         // Cargar historial
-        if (currentData.rut_usuario) {
+        if (activo.rut_usuario) {
           const histQ = query(
             collection(db, 'turnos'),
             where('rut_usuario', '==', currentData.rut_usuario),
@@ -234,55 +238,71 @@ export default function StaffPage() {
 
     const nextTurnoDoc = esperaDocs[0];
 
-    // Actualizar estado a 'llamado'
-    await updateDoc(doc(db, 'turnos', nextTurnoDoc.id), { 
-        estado: 'llamado', 
-        especialista_id: funcionario.id,
-        nombre_funcionario: funcionario.nombre || 'Funcionario',
-        departamento: funcionario.departamento || '',
-        cargo_funcionario: funcionario.cargo || '',
-        letra_especialista: funcionario.letra_atencion,
-        called_at: new Date().toISOString()
-    });
-    
-    await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'atendiendo' });
-    
-    // Notificar a n8n
-    triggerWebhook('llamado', {
-        numero: nextTurnoDoc.numero,
-        rut_usuario: nextTurnoDoc.rut_usuario,
-        especialista_id: funcionario.id,
-        nombre_funcionario: funcionario.nombre || 'Funcionario',
-        departamento: funcionario.departamento || '',
-        letra_especialista: funcionario.letra_atencion
-    });
+    try {
+      // Actualizar estado a 'llamado'
+      await updateDoc(doc(db, 'turnos', nextTurnoDoc.id), { 
+          estado: 'llamado', 
+          especialista_id: funcionario.id || '',
+          nombre_funcionario: funcionario.nombre || 'Funcionario',
+          departamento: funcionario.departamento || '',
+          cargo_funcionario: funcionario.cargo || '',
+          letra_especialista: funcionario.letra_atencion || 'A',
+          called_at: new Date().toISOString()
+      });
       
-    await refreshQueue(funcionario.id);
+      await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'atendiendo' });
+      setFuncionario({ ...funcionario, estado_funcionario: 'atendiendo' });
+      
+      // Notificar a n8n
+      triggerWebhook('llamado', {
+          numero: nextTurnoDoc.numero,
+          rut_usuario: nextTurnoDoc.rut_usuario,
+          especialista_id: funcionario.id || '',
+          nombre_funcionario: funcionario.nombre || 'Funcionario',
+          departamento: funcionario.departamento || '',
+          letra_especialista: funcionario.letra_atencion || 'A'
+      });
+        
+      await refreshQueue(funcionario.id);
+    } catch (e) {
+      console.error("Error al llamar siguiente:", e);
+      alert("Hubo un error al llamar al paciente. Revise consola.");
+    }
     setLoading(false);
   };
 
   const finalizarTurno = async () => {
     if (!currentTurno || !funcionario) return;
     setLoading(true);
-    await updateDoc(doc(db, 'turnos', currentTurno.id), { 
-        estado: 'atendido', 
-        finished_at: new Date().toISOString()
-    });
-      
-    await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'activo' });
-      
-    await refreshQueue(funcionario.id);
+    try {
+      await updateDoc(doc(db, 'turnos', currentTurno.id), { 
+          estado: 'atendido', 
+          finished_at: new Date().toISOString()
+      });
+        
+      await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'activo' });
+      setFuncionario({ ...funcionario, estado_funcionario: 'activo' });
+        
+      await refreshQueue(funcionario.id);
+    } catch (e) {
+      console.error(e);
+    }
     setLoading(false);
   };
 
   const saltarTurno = async () => {
     if (!currentTurno || !funcionario) return;
     setLoading(true);
-    await updateDoc(doc(db, 'turnos', currentTurno.id), { estado: 'saltado' });
-      
-    await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'activo' });
-      
-    await refreshQueue(funcionario.id);
+    try {
+      await updateDoc(doc(db, 'turnos', currentTurno.id), { estado: 'saltado' });
+        
+      await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'activo' });
+      setFuncionario({ ...funcionario, estado_funcionario: 'activo' });
+        
+      await refreshQueue(funcionario.id);
+    } catch (e) {
+      console.error(e);
+    }
     setLoading(false);
   };
 

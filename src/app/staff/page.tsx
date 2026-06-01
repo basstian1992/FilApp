@@ -35,7 +35,7 @@ export default function StaffPage() {
   const [authError, setAuthError] = useState('');
   const [isEditingLetra, setIsEditingLetra] = useState(false);
   const [newLetra, setNewLetra] = useState('');
-  const [departamentosDisponibles, setDepartamentosDisponibles] = useState<string[]>(['OMIL', 'DIDECO']);
+  const [departamentosDisponibles, setDepartamentosDisponibles] = useState<string[]>(['DIDECO', 'OMIL', 'PRODESAL', 'PMJH', 'FOMENTO', 'OTEC', 'TURISMO', 'OTRO']);
 
   const [funcionario, setFuncionario] = useState<Funcionario | null>(null);
   const [currentTurno, setCurrentTurno] = useState<Turno | null>(null);

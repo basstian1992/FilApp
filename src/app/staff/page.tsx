@@ -35,6 +35,7 @@ export default function StaffPage() {
   const [letraAtencion, setLetraAtencion] = useState('');
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState('');
+  const [isEditingLetra, setIsEditingLetra] = useState(false);
   const [newLetra, setNewLetra] = useState('');
   const [isEditingAvatar, setIsEditingAvatar] = useState(false);
   const [newAvatarUrl, setNewAvatarUrl] = useState('');

@@ -74,6 +74,7 @@ export default function StaffPage() {
       const querySnapshot = await getDocs(q);
       
       if (!querySnapshot.empty) {
+        const specDoc = querySnapshot.docs[0];
         const specData = { id: specDoc.id, ...specDoc.data() } as Funcionario;
         setFuncionario(specData);
         // Actualizar estado a activo al iniciar sesión

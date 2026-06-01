@@ -115,7 +115,7 @@ export default function StaffPage() {
         if (activo.rut_usuario) {
           const histQ = query(
             collection(db, 'turnos'),
-            where('rut_usuario', '==', currentData.rut_usuario),
+            where('rut_usuario', '==', activo.rut_usuario),
             where('estado', '==', 'atendido'),
             orderBy('finished_at', 'desc'),
             limit(5)

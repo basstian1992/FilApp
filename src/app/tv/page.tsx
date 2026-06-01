@@ -12,6 +12,7 @@ interface Turno {
   letra_especialista?: string;
   nombre_funcionario?: string;
   departamento?: string;
+  letra_ticket?: string;
   estado: string;
   created_at?: string;
 }
@@ -99,15 +100,16 @@ export default function TVPage() {
             // Trigger Audio
             let depStr = newTurno.departamento ? `de ${newTurno.departamento}` : '';
             const funcStr = newTurno.nombre_funcionario || 'Funcionario';
-            const textToSpeak = `Turno número ${newTurno.numero}, por favor acercarse a módulo ${newTurno.letra_especialista}, con ${funcStr} ${depStr}`;
+            const letraTicketStr = newTurno.letra_ticket ? `${newTurno.letra_ticket} ` : '';
+            const textToSpeak = `Turno ${letraTicketStr}${newTurno.numero}, por favor acercarse a módulo ${newTurno.letra_especialista}, con ${funcStr} ${depStr}`;
             if (audioEnabledRef.current) speak(textToSpeak);
           }
         });
       }
     });
 
-    // Fetch Espera (Nuevos ingresos)
-    const qEspera = query(turnosRef, where('estado', '==', 'espera'), orderBy('created_at', 'desc'), limit(4));
+    // Fetch Espera (Nuevos ingresos) sin orderBy para evitar error de indice compuesto
+    const qEspera = query(turnosRef, where('estado', '==', 'espera'));
     const unsubEspera = onSnapshot(qEspera, (snapshot) => {
       let isNew = false;
       if (isFirstLoadEspera.current) {
@@ -121,7 +123,15 @@ export default function TVPage() {
       }
       
       const ingresos = snapshot.docs.map(d => ({id: d.id, ...d.data()} as Turno));
-      setNuevosIngresos(ingresos);
+      
+      // Ordenar localmente descendente (mas recientes primero)
+      ingresos.sort((a, b) => {
+        const timeA = new Date(a.created_at || 0).getTime();
+        const timeB = new Date(b.created_at || 0).getTime();
+        return timeB - timeA;
+      });
+      
+      setNuevosIngresos(ingresos.slice(0, 4));
 
       if (isNew && audioEnabledRef.current) {
         // Usa un pitido corto si tienes un mp3, de lo contrario esto silencia o podríamos usar AudioContext.
@@ -178,7 +188,9 @@ export default function TVPage() {
           <div className={styles.mainCallCard} key={currentCall?.id}>
             <h2 className={styles.pulseText}>TURNO ACTUAL</h2>
             <div className={styles.mainTurno}>
-              {currentCall ? currentCall.numero : '--'}
+              {currentCall ? (
+                <>{currentCall.letra_ticket ? `${currentCall.letra_ticket}-` : ''}{currentCall.numero}</>
+              ) : '--'}
             </div>
             {currentCall && currentCall.letra_especialista && (
               <div className={styles.mainModulo}>
@@ -195,7 +207,7 @@ export default function TVPage() {
             <div className={styles.ingresosCards}>
               {nuevosIngresos.map(ing => (
                 <div key={ing.id} className={styles.ingresoCard}>
-                  Turno <strong>{ing.numero}</strong>
+                  Turno <strong>{ing.letra_ticket ? `${ing.letra_ticket}-` : ''}{ing.numero}</strong>
                 </div>
               ))}
               {nuevosIngresos.length === 0 && <span>Sin ingresos en espera</span>}
@@ -210,7 +222,7 @@ export default function TVPage() {
             {turnos.slice(1).map((turno) => (
               <div key={turno.id} className={styles.historyItem}>
                 <div className={styles.historyNumero}>
-                  Turno {turno.numero}
+                  Turno {turno.letra_ticket ? `${turno.letra_ticket}-` : ''}{turno.numero}
                 </div>
                 <div className={styles.historyModulo}>
                   Módulo {turno.letra_especialista}

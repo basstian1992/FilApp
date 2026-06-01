@@ -132,8 +132,61 @@
 
 .autoCloseText {
   color: var(--text-secondary);
-  font-size: 0.875rem;
-  margin-top: var(--spacing-2);
+  font-size: 1rem;
+  margin-top: var(--spacing-4);
+  animation: pulse 2s infinite;
+}
+
+.ticketDepto {
+  font-size: 1.5rem;
+  color: var(--text-secondary);
+  margin-top: -1rem;
+  margin-bottom: var(--spacing-4);
+}
+
+.deptoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-4);
+  width: 100%;
+  margin-top: var(--spacing-6);
+}
+
+.deptoBtn {
+  background: var(--surface-hover);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: var(--spacing-6);
+  border-radius: var(--radius-lg);
+  font-size: 1.25rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.deptoBtn:hover {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-premium);
+}
+
+.backBtn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-start;
+  margin-bottom: var(--spacing-2);
+  transition: color 0.2s;
+}
+
+.backBtn:hover {
+  color: var(--primary);
 }
 
 .realInput {

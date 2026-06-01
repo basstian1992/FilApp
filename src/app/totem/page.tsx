@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import styles from './totem.module.css';
 import { db } from '@/lib/firebase/client';
 import { collection, doc, runTransaction, setDoc, getDoc } from 'firebase/firestore';
@@ -26,8 +26,25 @@ function validateRUT(rut: string) {
 export default function TotemPage() {
   const [rut, setRut] = useState('');
   const [loading, setLoading] = useState(false);
-  const [ticket, setTicket] = useState<{ numero: number } | null>(null);
+  const [ticket, setTicket] = useState<{ numero: number, letra_ticket: string, departamento: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  
+  const [departamentos, setDepartamentos] = useState<string[]>(['DIDECO', 'OMIL', 'PRODESAL', 'PMJH']);
+  const [selectedDepto, setSelectedDepto] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'configuracion', 'global'));
+        if (snap.exists() && snap.data().departamentos) {
+          setDepartamentos(snap.data().departamentos);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchConfig();
+  }, []);
 
   const handleKeypad = (val: string) => {
     setErrorMsg('');
@@ -72,6 +89,8 @@ export default function TotemPage() {
       const turnoRef = doc(collection(db, 'turnos'));
       
       let newNumero = 1;
+      let letraTicket = selectedDepto ? selectedDepto.charAt(0).toUpperCase() : 'T';
+      
       await runTransaction(db, async (transaction) => {
         const configDoc = await transaction.get(configRef);
         
@@ -81,11 +100,12 @@ export default function TotemPage() {
         
         let currentNumero = 0;
         let lastReset = null;
+        const turnosKey = `currentTurno_${selectedDepto || 'general'}`;
 
         if (!configDoc.exists()) {
-          transaction.set(configRef, { currentTurno: 0, mensaje_dia: 'Bienvenidos' });
+          transaction.set(configRef, { [turnosKey]: 0, mensaje_dia: 'Bienvenidos' });
         } else {
-          currentNumero = configDoc.data().currentTurno || 0;
+          currentNumero = configDoc.data()[turnosKey] || 0;
           lastReset = configDoc.data().ultimo_reinicio || null;
         }
         
@@ -105,17 +125,19 @@ export default function TotemPage() {
         }
         
         newNumero = currentNumero + 1;
-        transaction.update(configRef, { currentTurno: newNumero, ultimo_reinicio: lastReset });
+        transaction.update(configRef, { [turnosKey]: newNumero, ultimo_reinicio: lastReset });
         
         transaction.set(turnoRef, {
           numero: newNumero,
+          letra_ticket: letraTicket,
+          departamento_solicitado: selectedDepto,
           rut_usuario: formattedRut,
           estado: 'espera',
           created_at: new Date().toISOString()
         });
       });
 
-      setTicket({ numero: newNumero });
+      setTicket({ numero: newNumero, letra_ticket: letraTicket, departamento: selectedDepto || '' });
       
       // Notificar a n8n
       triggerWebhook('ingreso', { numero: newNumero, rut_usuario: formattedRut });
@@ -124,6 +146,7 @@ export default function TotemPage() {
       setTimeout(() => {
         setTicket(null);
         setRut('');
+        setSelectedDepto(null);
       }, 8000);
       
     } catch (err: any) {
@@ -142,13 +165,35 @@ export default function TotemPage() {
           <p className={styles.instruction}>Por favor, espere su llamado en la pantalla.</p>
           
           <div className={styles.ticketNumber}>
-            {ticket.numero}
+            {ticket.letra_ticket}-{ticket.numero}
+          </div>
+          <div className={styles.ticketDepto}>
+            Módulo: {ticket.departamento}
           </div>
           
           <p className={styles.autoCloseText}>Esta pantalla se cerrará automáticamente...</p>
-          <button className={styles.primaryBtn} onClick={() => { setTicket(null); setRut(''); }}>
+          <button className={styles.primaryBtn} onClick={() => { setTicket(null); setRut(''); setSelectedDepto(null); }}>
             Nuevo Turno
           </button>
+        </div>
+      </main>
+    );
+  }
+
+  if (!selectedDepto) {
+    return (
+      <main className={styles.container}>
+        <div className={styles.glassPanel}>
+          <h1 className={styles.title}>Bienvenido</h1>
+          <p className={styles.subtitle}>Seleccione el módulo al que desea dirigirse</p>
+          
+          <div className={styles.deptoGrid}>
+            {departamentos.map(dep => (
+              <button key={dep} className={styles.deptoBtn} onClick={() => setSelectedDepto(dep)}>
+                {dep}
+              </button>
+            ))}
+          </div>
         </div>
       </main>
     );
@@ -157,7 +202,10 @@ export default function TotemPage() {
   return (
     <main className={styles.container}>
       <div className={styles.glassPanel}>
-        <h1 className={styles.title}>Bienvenido</h1>
+        <button className={styles.backBtn} onClick={() => { setSelectedDepto(null); setRut(''); setErrorMsg(''); }}>
+          ← Volver
+        </button>
+        <h1 className={styles.title}>{selectedDepto}</h1>
         <p className={styles.subtitle}>Ingrese su RUT para obtener un número de atención</p>
         
         <input 

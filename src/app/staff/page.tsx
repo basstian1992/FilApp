@@ -21,6 +21,7 @@ interface Funcionario {
 interface Turno {
   id: string;
   numero: number;
+  letra_ticket?: string;
   rut_usuario: string;
   estado: string;
 }
@@ -208,12 +209,15 @@ export default function StaffPage() {
       return;
     }
 
-    // Buscar turnos en espera sin ordenar en Firebase para evitar error de índice
-    const qNext = query(collection(db, 'turnos'), where('estado', '==', 'espera'));
+    // Buscar turnos en espera solo del departamento del funcionario
+    const qNext = query(collection(db, 'turnos'), 
+      where('estado', '==', 'espera'),
+      where('departamento_solicitado', '==', funcionario.departamento)
+    );
     const nextSnap = await getDocs(qNext);
 
     if (nextSnap.empty) {
-      alert("No hay pacientes en espera.");
+      alert("No hay pacientes en espera para " + funcionario.departamento);
       setLoading(false);
       return;
     }
@@ -418,7 +422,7 @@ export default function StaffPage() {
             <div className={styles.activeTurnoCard}>
               <h2>Atendiendo Actualmente</h2>
               <div className={styles.turnoDisplay}>
-                Turno {currentTurno.numero}
+                Turno {currentTurno.letra_ticket ? `${currentTurno.letra_ticket}-` : ''}{currentTurno.numero}
               </div>
               <div className={styles.patientInfo}>
                 <p><strong>RUT:</strong> {currentTurno.rut_usuario}</p>

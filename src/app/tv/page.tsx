@@ -25,6 +25,8 @@ export default function TVPage() {
   const [mensajeDia, setMensajeDia] = useState('Bienvenidos a nuestra institución.');
   
   const audioEnabledRef = useRef(isAudioEnabled);
+  const isFirstLoadLlamado = useRef(true);
+  const isFirstLoadEspera = useRef(true);
   useEffect(() => { audioEnabledRef.current = isAudioEnabled; }, [isAudioEnabled]);
   
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
@@ -83,18 +85,22 @@ export default function TVPage() {
       setTurnos(fetchedTurnos);
       
       // Check for newly added 'llamado' in this snapshot to trigger TTS
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
-          const newTurno = { id: change.doc.id, ...change.doc.data() } as Turno;
-          setCurrentCall(newTurno);
-          
-          // Trigger Audio
-          let depStr = newTurno.departamento ? `de ${newTurno.departamento}` : '';
-          const funcStr = newTurno.nombre_funcionario || 'Funcionario';
-          const textToSpeak = `Turno número ${newTurno.numero}, por favor acercarse a módulo ${newTurno.letra_especialista}, con ${funcStr} ${depStr}`;
-          if (audioEnabledRef.current) speak(textToSpeak);
-        }
-      });
+      if (isFirstLoadLlamado.current) {
+        isFirstLoadLlamado.current = false;
+      } else {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added') {
+            const newTurno = { id: change.doc.id, ...change.doc.data() } as Turno;
+            setCurrentCall(newTurno);
+            
+            // Trigger Audio
+            let depStr = newTurno.departamento ? `de ${newTurno.departamento}` : '';
+            const funcStr = newTurno.nombre_funcionario || 'Funcionario';
+            const textToSpeak = `Turno número ${newTurno.numero}, por favor acercarse a módulo ${newTurno.letra_especialista}, con ${funcStr} ${depStr}`;
+            if (audioEnabledRef.current) speak(textToSpeak);
+          }
+        });
+      }
       
       // Set current call if array is not empty and no new ones were added
       if (fetchedTurnos.length > 0 && !snapshot.docChanges().some(c => c.type === 'added')) {
@@ -106,15 +112,15 @@ export default function TVPage() {
     const qEspera = query(turnosRef, where('estado', '==', 'espera'), orderBy('created_at', 'desc'), limit(4));
     const unsubEspera = onSnapshot(qEspera, (snapshot) => {
       let isNew = false;
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
-          const data = change.doc.data();
-          if (data.created_at) {
-             const age = Date.now() - new Date(data.created_at).getTime();
-             if (age < 5000) isNew = true; 
+      if (isFirstLoadEspera.current) {
+        isFirstLoadEspera.current = false;
+      } else {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added') {
+            isNew = true; 
           }
-        }
-      });
+        });
+      }
       
       const ingresos = snapshot.docs.map(d => ({id: d.id, ...d.data()} as Turno));
       setNuevosIngresos(ingresos);

@@ -160,20 +160,33 @@ export default function TotemPage() {
         <h1 className={styles.title}>Bienvenido</h1>
         <p className={styles.subtitle}>Ingrese su RUT para obtener un número de atención</p>
         
-        <div className={styles.inputDisplay}>
-          {rut ? formatRutUI(rut) : '12345678-9'}
-        </div>
+        <input 
+          type="text"
+          className={styles.realInput}
+          value={rut ? formatRutUI(rut) : ''}
+          placeholder="12345678-9"
+          onChange={(e) => {
+            const val = e.target.value.replace(/[^0-9kK]/gi, '');
+            if (val.length <= 10) setRut(val);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && rut.length >= 8 && !loading) {
+              handleSubmit();
+            }
+          }}
+          autoFocus
+        />
         
         {errorMsg && <p style={{ color: 'var(--destructive)', fontWeight: 'bold' }}>{errorMsg}</p>}
 
         <div className={styles.keypad}>
-          {['1','2','3','4','5','6','7','8','9','k','0','DEL'].map((key) => (
+          {['1','2','3','4','5','6','7','8','9','C','0','k','DEL'].map((key) => (
             <button 
               key={key} 
-              className={styles.keyBtn} 
+              className={`${styles.keyBtn} ${key === 'DEL' ? styles.delBtn : ''} ${key === 'C' ? styles.clearBtn : ''}`}
               onClick={() => handleKeypad(key)}
             >
-              {key}
+              {key === 'DEL' ? 'Borrar' : key === 'C' ? 'Limpiar' : key}
             </button>
           ))}
         </div>

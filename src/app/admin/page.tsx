@@ -8,7 +8,7 @@ import { Settings, BarChart3, Users, Clock, AlertTriangle } from 'lucide-react';
 
 export default function AdminPage() {
   const [mensajeDia, setMensajeDia] = useState('');
-  const [departamentosStr, setDepartamentosStr] = useState('OMIL, DIDECO');
+  const [departamentosStr, setDepartamentosStr] = useState('OMIL, PRODESAL, PJDH, DIDECO, Programa S., OTEC, Fomento');
   const [webhookUrl, setWebhookUrl] = useState('');
   const [savingConfig, setSavingConfig] = useState(false);
   const [stats, setStats] = useState({
@@ -206,51 +206,95 @@ export default function AdminPage() {
             </button>
           </section>
 
-          {/* Gráfico / Reportes Mock */}
+          {/* Gestión de Funcionarios */}
           <section className={styles.chartSection} style={{overflowX: 'auto'}}>
-            <h2>Gestión de Funcionarios</h2>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Nombre</th>
-                  <th>Departamento</th>
-                  <th>Módulo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {funcionarios.map(f => (
-                  <tr key={f.id}>
-                    <td>
-                      <input 
-                        className={styles.tableInput}
-                        value={f.nombre || ''} 
-                        onChange={e => updateFuncionario(f.id, 'nombre', e.target.value)} 
-                        placeholder="Nombre Funcionario"
-                      />
-                    </td>
-                    <td>
-                      <input 
-                        className={styles.tableInput}
-                        value={f.departamento || ''} 
-                        onChange={e => updateFuncionario(f.id, 'departamento', e.target.value)} 
-                        placeholder="OMIL"
-                      />
-                    </td>
-                    <td>
-                      <input 
-                        className={styles.tableInput}
-                        value={f.letra_atencion || ''} 
-                        onChange={e => updateFuncionario(f.id, 'letra_atencion', e.target.value)} 
-                        placeholder="A"
-                      />
-                    </td>
-                  </tr>
-                ))}
-                {funcionarios.length === 0 && (
-                  <tr><td colSpan={3}>No hay funcionarios registrados.</td></tr>
-                )}
-              </tbody>
-            </table>
+            <h2>Gestión de Funcionarios por Departamento</h2>
+            
+            {departamentosStr.split(',').map(s => s.trim()).filter(Boolean).map(depto => {
+              const funcs = funcionarios.filter(f => f.departamento === depto);
+              return (
+                <div key={depto} className={styles.deptoGroup}>
+                  <h3 className={styles.deptoTitle}>{depto}</h3>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th>Cargo o Función</th>
+                        <th>Módulo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {funcs.map(f => (
+                        <tr key={f.id}>
+                          <td>
+                            <input 
+                              className={styles.tableInput}
+                              value={f.nombre || ''} 
+                              onChange={e => updateFuncionario(f.id, 'nombre', e.target.value)} 
+                              placeholder="Nombre Funcionario"
+                            />
+                          </td>
+                          <td>
+                            <input 
+                              className={styles.tableInput}
+                              value={f.cargo || ''} 
+                              onChange={e => updateFuncionario(f.id, 'cargo', e.target.value)} 
+                              placeholder="Psicólogo, Asistente..."
+                            />
+                          </td>
+                          <td>
+                            <input 
+                              className={styles.tableInput}
+                              value={f.letra_atencion || ''} 
+                              onChange={e => updateFuncionario(f.id, 'letra_atencion', e.target.value)} 
+                              placeholder="A"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                      {funcs.length === 0 && (
+                        <tr><td colSpan={3}>Sin funcionarios registrados en este departamento.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })}
+
+            {/* Funcionarios sin departamento o con departamento eliminado */}
+            {funcionarios.filter(f => !departamentosStr.split(',').map(s => s.trim()).includes(f.departamento)).length > 0 && (
+              <div className={styles.deptoGroup}>
+                <h3 className={styles.deptoTitle} style={{color: 'var(--destructive)'}}>Otros / Sin Asignar</h3>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>Cargo o Función</th>
+                      <th>Departamento Actual</th>
+                      <th>Módulo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {funcionarios.filter(f => !departamentosStr.split(',').map(s => s.trim()).includes(f.departamento)).map(f => (
+                      <tr key={f.id}>
+                        <td>
+                          <input className={styles.tableInput} value={f.nombre || ''} onChange={e => updateFuncionario(f.id, 'nombre', e.target.value)} />
+                        </td>
+                        <td>
+                          <input className={styles.tableInput} value={f.cargo || ''} onChange={e => updateFuncionario(f.id, 'cargo', e.target.value)} />
+                        </td>
+                        <td>
+                          <input className={styles.tableInput} value={f.departamento || ''} onChange={e => updateFuncionario(f.id, 'departamento', e.target.value)} />
+                        </td>
+                        <td>
+                          <input className={styles.tableInput} value={f.letra_atencion || ''} onChange={e => updateFuncionario(f.id, 'letra_atencion', e.target.value)} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         </div>
 

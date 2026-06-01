@@ -135,3 +135,31 @@
   font-size: 0.875rem;
   margin-top: var(--spacing-2);
 }
+
+.realInput {
+  width: 100%;
+  padding: var(--spacing-4);
+  font-size: 3rem;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  background: var(--surface-hover);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.realInput:focus {
+  border-color: var(--primary);
+}
+
+.delBtn {
+  grid-column: span 3;
+  background: var(--surface-color);
+}
+
+.clearBtn {
+  color: var(--destructive);
+}

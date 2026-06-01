@@ -12,6 +12,7 @@ interface Funcionario {
   id: string;
   nombre: string;
   departamento: string;
+  cargo?: string;
   letra_atencion: string;
 }
 
@@ -28,6 +29,7 @@ export default function StaffPage() {
   const [password, setPassword] = useState('');
   const [nombre, setNombre] = useState('');
   const [departamento, setDepartamento] = useState('OMIL');
+  const [cargo, setCargo] = useState('');
   const [letraAtencion, setLetraAtencion] = useState('');
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState('');
@@ -131,6 +133,7 @@ export default function StaffPage() {
             user_id: userCred.user.uid,
             nombre: nombre || 'Funcionario Nuevo',
             departamento: departamento,
+            cargo: cargo || 'Funcionario',
             letra_atencion: letraAtencion || email.split('@')[0].toUpperCase().substring(0,2)
           });
           // La sesión se actualizará sola por el onAuthStateChanged
@@ -196,6 +199,7 @@ export default function StaffPage() {
         especialista_id: funcionario.id,
         nombre_funcionario: funcionario.nombre || 'Funcionario',
         departamento: funcionario.departamento || '',
+        cargo_funcionario: funcionario.cargo || '',
         letra_especialista: funcionario.letra_atencion,
         called_at: new Date().toISOString()
     });
@@ -271,6 +275,10 @@ export default function StaffPage() {
             </select>
           </div>
           <div className={styles.inputGroup}>
+            <label>Cargo o Función (Solo cuenta nueva)</label>
+            <input type="text" placeholder="Ej: Psicólogo, Asistente..." value={cargo} onChange={e => setCargo(e.target.value)} />
+          </div>
+          <div className={styles.inputGroup}>
             <label>Módulo / Letra (Solo cuenta nueva)</label>
             <input type="text" placeholder="Ej: A, B, Box 1" value={letraAtencion} onChange={e => setLetraAtencion(e.target.value)} />
           </div>
@@ -314,7 +322,7 @@ export default function StaffPage() {
                 </>
               )}
             </div>
-            <span>{funcionario?.departamento} | {session?.email}</span>
+            <span>{funcionario?.cargo ? `${funcionario.cargo} en ` : ''}{funcionario?.departamento} | {session?.email}</span>
           </div>
         </div>
         <button onClick={handleLogout} className={styles.logoutBtn}>

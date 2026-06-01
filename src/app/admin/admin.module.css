@@ -225,3 +225,20 @@
     grid-template-columns: 1fr;
   }
 }
+
+.deptoGroup {
+  margin-bottom: var(--spacing-8);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.deptoTitle {
+  background: var(--surface-hover);
+  padding: var(--spacing-4) var(--spacing-6);
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: var(--primary);
+  border-bottom: 1px solid var(--border-color);
+  margin: 0;
+}

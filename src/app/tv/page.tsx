@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { db } from '@/lib/firebase/client';
 import { collection, query, where, orderBy, limit, onSnapshot, doc } from 'firebase/firestore';
 import styles from './tv.module.css';
-import { Volume2, VolumeX, Play } from 'lucide-react';
+import { Volume2, VolumeX, Play, Moon, Sun } from 'lucide-react';
 
 interface Turno {
   id: string;
@@ -19,6 +19,27 @@ interface Turno {
 }
 
 export default function TVPage() {
+  // Dark mode state
+  const [isDark, setIsDark] = useState(() => {
+    // Initialize from localStorage if available
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('tv-dark-mode');
+      return stored === 'true';
+    }
+    return false;
+  });
+
+  // Apply theme attribute to root element
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDark) {
+      root.setAttribute('data-theme', 'dark');
+    } else {
+      root.removeAttribute('data-theme');
+    }
+    // Persist preference
+    localStorage.setItem('tv-dark-mode', String(isDark));
+  }, [isDark]);
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [nuevosIngresos, setNuevosIngresos] = useState<Turno[]>([]);
   const [currentCall, setCurrentCall] = useState<Turno | null>(null);
@@ -110,35 +131,24 @@ export default function TVPage() {
             const newTurno = { id: change.doc.id, ...change.doc.data() } as Turno;
             
             // Trigger Audio
-            let depStr = newTurno.departamento ? `de ${newTurno.departamento}` : '';
+            const depStr = newTurno.departamento ? `de ${newTurno.departamento}` : '';
             const funcStr = newTurno.nombre_funcionario || 'Funcionario';
             const letraTicketStr = newTurno.letra_ticket ? `${newTurno.letra_ticket} ` : '';
             const textToSpeak = `Turno ${letraTicketStr}${newTurno.numero}, por favor acercarse a módulo ${newTurno.letra_especialista}, con ${funcStr} ${depStr}`;
-            
-            if (audioEnabledRef.current) {
-              const playDingAndSpeak = () => {
-                const ding = new Audio('/ding.mp3.mp3');
-                ding.play()
-                  .then(() => {
-                    setTimeout(() => {
-                      speak(textToSpeak);
-                    }, 1200);
-                  })
-                  .catch((err) => {
-                    console.log('Error playing /ding.mp3.mp3, trying fallback /ding.mp3', err);
-                    const fallbackDing = new Audio('/ding.mp3');
-                    fallbackDing.play()
-                      .then(() => {
-                        setTimeout(() => {
-                          speak(textToSpeak);
-                        }, 1200);
-                      })
-                      .catch((err2) => {
-                        console.log('Error playing fallback ding, speaking directly:', err2);
+                        if (audioEnabledRef.current) {
+                const playDingAndSpeak = () => {
+                  const ding = new Audio('/ding.mp3');
+                  ding.play()
+                    .then(() => {
+                      setTimeout(() => {
                         speak(textToSpeak);
-                      });
-                  });
-              };
+                      }, 1200);
+                    })
+                    .catch((err) => {
+                      console.log('Error playing ding.mp3', err);
+                      speak(textToSpeak);
+                    });
+                };
               playDingAndSpeak();
             }
           }
@@ -218,12 +228,20 @@ export default function TVPage() {
         >
           {isAudioEnabled ? <Volume2 size={32} /> : <VolumeX size={32} color="var(--destructive)" />}
         </button>
+        {/* Dark mode toggle */}
+        <button
+          className={styles.themeToggle}
+          onClick={() => setIsDark(!isDark)}
+          title={isDark ? "Modo Claro" : "Modo Oscuro"}
+        >
+          {isDark ? <Sun size={24} /> : <Moon size={24} />}
+        </button>
       </header>
 
-      <div className={styles.layout}>
+      <div className={`${styles.layout} ${styles.glass}`}>
         {/* Lado Izquierdo: Llamado Actual */}
         <section className={styles.mainCallSection}>
-          <div className={styles.mainCallCard} key={currentCall?.id}>
+          <div className={`${styles.mainCallCard} ${styles.glass}`} key={currentCall?.id}>
             <h2 className={styles.pulseText}>TURNO ACTUAL</h2>
             <div className={styles.mainTurno}>
               {currentCall ? (

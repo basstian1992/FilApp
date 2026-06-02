@@ -30,7 +30,9 @@
 }
 .startBtn:hover {
   transform: scale(1.05);
-  background: var(--primary-hover);
+  background: linear-gradient(135deg, var(--primary), var(--bg-color));
+  color: var(--text-primary);
+  overflow: hidden;
 }
 
 .container {
@@ -43,13 +45,7 @@
 }
 
 .header {
-  height: 80px;
-  background: var(--surface-color);
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--spacing-8);
+
 }
 
 .logo {
@@ -121,6 +117,16 @@
   line-height: 1;
   color: var(--text-primary);
   text-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  animation: pulseTurno 3s infinite;
+  font-size: 18rem;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--text-primary);
+  text-shadow: 0 10px 30px rgba(0,0,0,0.1);
+@keyframes pulseTurno {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
 }
 
 .mainModulo {
@@ -251,3 +257,32 @@
     min-height: 400px;
   }
 }
+
+.glass {
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-xl);
+}
+
+.themeToggle {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+  cursor: pointer;
+  margin-left: var(--spacing-4);
+}
+
+/* Dark mode variables */
+[data-theme="dark"] {
+  --bg-color: #0a0a0a;
+  --surface-color: rgba(20, 20, 20, 0.8);
+  --primary: #0ea5e9; /* teal-500 */
+  --primary-hover: #0284c7;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --border-color: #1e293b;
+}
+

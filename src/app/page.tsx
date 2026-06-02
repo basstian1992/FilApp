@@ -12,9 +12,9 @@ export default function LandingPage() {
       </div>
 
       <div className={styles.grid}>
-        <Link href="/staff" className={styles.card}>
+        <Link href="/funcionarios" className={styles.card}>
           <div className={styles.iconWrapper}><UserRound size={32} /></div>
-          <h2>Especialistas</h2>
+          <h2>Funcionarios</h2>
           <p>Atención de usuarios, llamadas y control de fila.</p>
         </Link>
 

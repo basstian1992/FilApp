@@ -5,7 +5,7 @@ import { db, auth } from '@/lib/firebase/client';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { collection, query, where, getDocs, updateDoc, doc, setDoc, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { triggerWebhook } from '@/lib/notify';
-import styles from './staff.module.css';
+import styles from './funcionarios.module.css';
 import { LogOut, User, CheckCircle, SkipForward, Megaphone, Download } from 'lucide-react';
 
 interface Funcionario {
@@ -16,8 +16,8 @@ interface Funcionario {
   estado_funcionario?: string;
   avatar_url?: string;
   letra_atencion: string;
-  telegram_chat_id?: string;
-  telegram_bot_token?: string;
+  whatsapp_phone?: string;
+  whatsapp_apikey?: string;
 }
 
 interface Turno {
@@ -49,9 +49,9 @@ export default function StaffPage() {
   const [queueDocs, setQueueDocs] = useState<any[]>([]);
   const [userHistory, setUserHistory] = useState<any[]>([]);
 
-  // Telegram states
-  const [telegramChatId, setTelegramChatId] = useState('');
-  const [telegramBotToken, setTelegramBotToken] = useState('');
+  // WhatsApp states
+  const [whatsappPhone, setWhatsappPhone] = useState('');
+  const [whatsappApiKey, setWhatsappApiKey] = useState('');
   const [isSavingWhatsapp, setIsSavingWhatsapp] = useState(false);
   const [testSent, setTestSent] = useState(false);
   const [testError, setTestError] = useState('');
@@ -59,6 +59,7 @@ export default function StaffPage() {
   // Refs for tracking changes and bypassing closures in firestore listener
   const funcionarioRef = useRef<Funcionario | null>(null);
   const isFirstEspera = useRef(true);
+  const isFirstLoad = useRef(true);
 
   useEffect(() => {
     funcionarioRef.current = funcionario;
@@ -96,14 +97,15 @@ export default function StaffPage() {
           const specDoc = querySnapshot.docs[0];
           const specData = { id: specDoc.id, ...specDoc.data() } as Funcionario;
           
-          setFuncionario((prev) => ({ ...specData, estado_funcionario: prev?.estado_funcionario || 'activo' }));
-          setTelegramChatId(specData.telegram_chat_id || '');
-          setTelegramBotToken(specData.telegram_bot_token || '');
+          setFuncionario(specData);
+          setWhatsappPhone(specData.whatsapp_phone || '');
+          setWhatsappApiKey(specData.whatsapp_apikey || '');
           
-          if (!funcionario) {
+          if (isFirstLoad.current) {
             // First load for this session
+            isFirstLoad.current = false;
             await updateDoc(doc(db, 'especialistas', specData.id), { estado_funcionario: 'activo' });
-            await refreshQueue(specData.id);
+            refreshQueue(specData.id);
           }
           setLoading(false);
         } else {
@@ -132,21 +134,21 @@ export default function StaffPage() {
               const allDocs = snap.docs.map(d => d.data());
               const currentQueueCount = allDocs.filter(d => d.departamento_solicitado === currentFunc.departamento).length;
 
-              if (currentFunc.telegram_chat_id && currentFunc.telegram_bot_token) {
+              if (currentFunc.whatsapp_phone && currentFunc.whatsapp_apikey) {
                 const ticketStr = `${newTurno.letra_ticket || 'T'}-${newTurno.numero}`;
                 const deptoStr = newTurno.departamento_solicitado || currentFunc.departamento;
 
-                const msg = `🔔 *FilApp - Nuevo Turno*\n\nSe ha solicitado un nuevo turno en tu módulo de *${deptoStr}*.\n\n🎫 *Turno:* ${ticketStr}\n👥 *Personas en cola:* ${currentQueueCount}\n\nIngresa al panel para atender.`;
+                const msg = `🔔 *FilApp - Nuevo Turno*\nSe ha solicitado un nuevo turno en tu módulo de *${deptoStr}*.\n🎫 *Turno:* ${ticketStr}\n👥 *Personas en cola:* ${currentQueueCount}\nIngresa al panel para atender.`;
 
-                fetch('/api/telegram', {
+                fetch('/api/whatsapp', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    chatId: currentFunc.telegram_chat_id,
-                    botToken: currentFunc.telegram_bot_token,
+                    phone: currentFunc.whatsapp_phone,
+                    apikey: currentFunc.whatsapp_apikey,
                     message: msg
                   })
-                }).catch(err => console.error('Error al enviar Telegram:', err));
+                }).catch(err => console.error('Error al enviar WhatsApp:', err));
               }
             }
           }
@@ -257,27 +259,27 @@ export default function StaffPage() {
     setLoading(false);
   };
 
-  const handleLinkTelegram = async (e: React.FormEvent) => {
+  const handleLinkWhatsapp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!funcionario || !telegramChatId.trim() || !telegramBotToken.trim()) return;
+    if (!funcionario || !whatsappPhone.trim() || !whatsappApiKey.trim()) return;
 
     setIsSavingWhatsapp(true);
     setTestSent(false);
     setTestError('');
 
-    const cleanChatId = telegramChatId.trim();
-    const cleanToken = telegramBotToken.trim();
+    const cleanPhone = whatsappPhone.trim();
+    const cleanKey = whatsappApiKey.trim();
     
-    const testMsg = `📲 *¡FilApp Conectado!*\n\nHola *${funcionario.nombre}*, tu Telegram se ha vinculado correctamente a FilApp.\n\nRecibirás una notificación en este chat cada vez que ingresen turnos en espera para *${funcionario.departamento}*.\n\n_Este servicio estará activo mientras mantengas tu panel abierto._`;
+    const testMsg = `📲 *¡FilApp Conectado!*\nHola *${funcionario.nombre}*, tu WhatsApp se ha vinculado correctamente a FilApp.\nRecibirás una notificación en este chat cada vez que ingresen turnos en espera para *${funcionario.departamento}*.\n_Este servicio estará activo mientras mantengas tu panel abierto._`;
 
     try {
       // 1. Send test message via API to verify it works
-      const res = await fetch('/api/telegram', {
+      const res = await fetch('/api/whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chatId: cleanChatId,
-          botToken: cleanToken,
+          phone: cleanPhone,
+          apikey: cleanKey,
           message: testMsg
         })
       });
@@ -285,53 +287,53 @@ export default function StaffPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Error al conectar con la API de Telegram. Verifica el Token y tu Chat ID.');
+        throw new Error(data.error || 'Error al conectar con CallMeBot. Verifica la API Key y tu Número de teléfono.');
       }
 
       // 2. Save credentials to Firestore
       await updateDoc(doc(db, 'especialistas', funcionario.id), {
-        telegram_chat_id: cleanChatId,
-        telegram_bot_token: cleanToken
+        whatsapp_phone: cleanPhone,
+        whatsapp_apikey: cleanKey
       });
 
       // 3. Update local state
       setFuncionario({
         ...funcionario,
-        telegram_chat_id: cleanChatId,
-        telegram_bot_token: cleanToken
+        whatsapp_phone: cleanPhone,
+        whatsapp_apikey: cleanKey
       });
 
       setTestSent(true);
     } catch (err: any) {
-      console.error('Error al vincular Telegram:', err);
+      console.error('Error al vincular WhatsApp:', err);
       setTestError(err.message || 'No se pudo conectar. Por favor verifica tus credenciales.');
     } finally {
       setIsSavingWhatsapp(false);
     }
   };
 
-  const handleUnlinkTelegram = async () => {
+  const handleUnlinkWhatsapp = async () => {
     if (!funcionario) return;
 
     setIsSavingWhatsapp(true);
     try {
       await updateDoc(doc(db, 'especialistas', funcionario.id), {
-        telegram_chat_id: '',
-        telegram_bot_token: ''
+        whatsapp_phone: '',
+        whatsapp_apikey: ''
       });
 
       setFuncionario({
         ...funcionario,
-        telegram_chat_id: '',
-        telegram_bot_token: ''
+        whatsapp_phone: '',
+        whatsapp_apikey: ''
       });
 
-      setTelegramChatId('');
-      setTelegramBotToken('');
+      setWhatsappPhone('');
+      setWhatsappApiKey('');
       setTestSent(false);
       setTestError('');
     } catch (err) {
-      console.error('Error al desvincular Telegram:', err);
+      console.error('Error al desvincular WhatsApp:', err);
       alert('Error al desvincular.');
     } finally {
       setIsSavingWhatsapp(false);
@@ -397,7 +399,7 @@ export default function StaffPage() {
           letra_especialista: funcionario.letra_atencion || 'A'
       });
         
-      await refreshQueue(funcionario.id);
+      // Auto updated via snapshot
     } catch (e) {
       console.error("Error al llamar siguiente:", e);
       alert("Hubo un error al llamar al paciente. Revise consola.");
@@ -417,7 +419,7 @@ export default function StaffPage() {
       await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'activo' });
       setFuncionario({ ...funcionario, estado_funcionario: 'activo' });
         
-      await refreshQueue(funcionario.id);
+      // Auto updated via snapshot
     } catch (e) {
       console.error(e);
     }
@@ -433,7 +435,7 @@ export default function StaffPage() {
       await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'activo' });
       setFuncionario({ ...funcionario, estado_funcionario: 'activo' });
         
-      await refreshQueue(funcionario.id);
+      // Auto updated via snapshot
     } catch (e) {
       console.error(e);
     }
@@ -649,72 +651,72 @@ export default function StaffPage() {
             </button>
           </div>
 
-          {/* Tarjeta de Configuración de Telegram */}
+          {/* Tarjeta de Configuración de WhatsApp */}
           <div className={styles.whatsappCard}>
-            <h3>📲 Alertas de Telegram</h3>
+            <h3>📲 Alertas de WhatsApp</h3>
             
-            {funcionario?.telegram_chat_id && funcionario?.telegram_bot_token ? (
+            {funcionario?.whatsapp_phone && funcionario?.whatsapp_apikey ? (
               <div className={styles.waConnectedState}>
                 <div className={styles.waBadge}>
-                  <span className={styles.waActiveDot} /> Conectado a Telegram
+                  <span className={styles.waActiveDot} /> Conectado a WhatsApp
                 </div>
                 <p className={styles.waMeta}>
-                  <strong>Chat ID:</strong> {funcionario.telegram_chat_id}
+                  <strong>Teléfono:</strong> +{funcionario.whatsapp_phone}
                 </p>
                 <p className={styles.waInstructionText}>
-                  Recibirás alertas en tiempo real en Telegram cuando lleguen turnos de <strong>{funcionario.departamento}</strong>.
+                  Recibirás alertas en tiempo real en tu WhatsApp cuando lleguen turnos de <strong>{funcionario.departamento}</strong>.
                 </p>
                 <button 
-                  onClick={handleUnlinkTelegram} 
+                  onClick={handleUnlinkWhatsapp} 
                   className={styles.waDisconnectBtn}
                   disabled={isSavingWhatsapp}
                 >
-                  Desconectar Telegram
+                  Desconectar WhatsApp
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleLinkTelegram} className={styles.waForm}>
+              <form onSubmit={handleLinkWhatsapp} className={styles.waForm}>
                 <p className={styles.waDescription}>
-                  Recibe notificaciones automáticas e instantáneas en tu celular cuando haya turnos en espera para tu módulo.
+                  Recibe notificaciones automáticas e instantáneas en tu celular cuando haya turnos en espera para tu módulo mediante CallMeBot.
                 </p>
                 
                 <div className={styles.waSteps}>
                   <h4>Configuración en 15 segundos:</h4>
                   <ol>
                     <li>
-                      Crea un bot institucional hablando con <a href="https://t.me/BotFather" target="_blank" rel="noreferrer"><strong>@BotFather</strong></a> en Telegram, envía `/newbot` y obtén tu <strong>Bot Token</strong>.
+                      Agrega el número de teléfono <strong>+34 691 62 17 28</strong> a tus contactos.
                     </li>
                     <li>
-                      Busca tu nuevo bot en Telegram y haz clic en <strong>Iniciar (/start)</strong>.
+                      Envíale un mensaje de WhatsApp que diga: <strong>I allow callmebot to send me messages</strong>.
                     </li>
                     <li>
-                      Obtén tu ID personal buscando a <a href="https://t.me/GetMyChatID_Bot" target="_blank" rel="noreferrer"><strong>@GetMyChatID_Bot</strong></a> en Telegram e inicia el bot para ver tu <strong>Chat ID</strong>.
+                      El bot responderá con tu <strong>API Key</strong>. Ingresa abajo tu teléfono y esa clave.
                     </li>
                   </ol>
                 </div>
 
                 {testError && <div className={styles.waError}>{testError}</div>}
-                {testSent && <div className={styles.waSuccess}>¡Telegram vinculado! Revisa el chat de tu bot para ver el mensaje de confirmación.</div>}
+                {testSent && <div className={styles.waSuccess}>¡WhatsApp vinculado! Revisa tu celular para ver el mensaje de confirmación.</div>}
 
                 <div className={styles.waInputGroup}>
-                  <label>Token del Bot Institucional</label>
+                  <label>Número de WhatsApp (con código ej: 56912345678)</label>
                   <input 
                     type="text" 
-                    placeholder="Ej: 123456789:ABCdefGh..." 
-                    value={telegramBotToken}
-                    onChange={e => setTelegramBotToken(e.target.value)}
+                    placeholder="Ej: 56912345678" 
+                    value={whatsappPhone}
+                    onChange={e => setWhatsappPhone(e.target.value.replace(/[^0-9]/g, ''))}
                     required 
                     disabled={isSavingWhatsapp}
                   />
                 </div>
 
                 <div className={styles.waInputGroup}>
-                  <label>Tu Chat ID Personal</label>
+                  <label>Tu CallMeBot API Key</label>
                   <input 
                     type="text" 
-                    placeholder="Ej: 987654321" 
-                    value={telegramChatId}
-                    onChange={e => setTelegramChatId(e.target.value)}
+                    placeholder="Ej: 123456" 
+                    value={whatsappApiKey}
+                    onChange={e => setWhatsappApiKey(e.target.value)}
                     required 
                     disabled={isSavingWhatsapp}
                   />
@@ -723,7 +725,7 @@ export default function StaffPage() {
                 <button 
                   type="submit" 
                   className={styles.waConnectBtn}
-                  disabled={isSavingWhatsapp || !telegramChatId.trim() || !telegramBotToken.trim()}
+                  disabled={isSavingWhatsapp || !whatsappPhone.trim() || !whatsappApiKey.trim()}
                 >
                   {isSavingWhatsapp ? 'Vinculando...' : 'Vincular y Probar'}
                 </button>

@@ -1,66 +1,118 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { db } from '@/lib/firebase/client';
-import { collection, query, where, getDocs, doc, setDoc, onSnapshot, updateDoc, orderBy } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
+import { db, auth } from '@/lib/firebase/client';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { collection, query, where, getDocs, doc, setDoc, onSnapshot, updateDoc, orderBy, addDoc, getDoc } from 'firebase/firestore';
 import styles from './admin.module.css';
-import { Settings, BarChart3, Users, Clock, AlertTriangle, Download } from 'lucide-react';
+import { Settings, BarChart3, Users, Clock, AlertTriangle, Download, LogOut, Building2, UserPlus } from 'lucide-react';
 
 export default function AdminPage() {
+  const router = useRouter();
+  const [session, setSession] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [institutionId, setInstitutionId] = useState<string | null>(null);
+  const [institutionName, setInstitutionName] = useState('');
+
   const [mensajeDia, setMensajeDia] = useState('');
-  const [departamentosStr, setDepartamentosStr] = useState('DIDECO, OMIL, PRODESAL, P.M. Jefas de Hogar, Turismo, OTEC, Fomento, Otro');
+  const [departamentosStr, setDepartamentosStr] = useState('OIRS, Atención General');
+  const [oirsDepartamento, setOirsDepartamento] = useState('OIRS');
   const [webhookUrl, setWebhookUrl] = useState('');
   const [savingConfig, setSavingConfig] = useState(false);
   const [stats, setStats] = useState({
     enEspera: 0,
     atendidosHoy: 0,
-    tiempoPromedioEspera: 0, // min
-    tiempoPromedioAtencion: 0, // min
+    tiempoPromedioEspera: 0,
+    tiempoPromedioAtencion: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState('');
   const [funcionarios, setFuncionarios] = useState<any[]>([]);
 
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const [showNewFuncForm, setShowNewFuncForm] = useState(false);
+  const [newUserRole, setNewUserRole] = useState<'funcionario' | 'admin'>('funcionario');
+  const [newFuncEmail, setNewFuncEmail] = useState('');
+  const [newFuncPassword, setNewFuncPassword] = useState('');
+  const [newFuncName, setNewFuncName] = useState('');
+  const [newFuncDepto, setNewFuncDepto] = useState('');
+  const [newFuncCargo, setNewFuncCargo] = useState('');
+  const [newFuncLetra, setNewFuncLetra] = useState('');
+  const [newFuncMessage, setNewFuncMessage] = useState('');
+
   useEffect(() => {
-    // Suscribirse a configuracion global
-    const unsubConfig = onSnapshot(doc(db, 'configuracion', 'global'), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.mensaje_dia) setMensajeDia(data.mensaje_dia);
-        if (data.departamentos) setDepartamentosStr(data.departamentos.join(', '));
-        if (data.n8n_webhook_url) setWebhookUrl(data.n8n_webhook_url);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setSession(user);
+      if (user) {
+        const q = query(collection(db, 'especialistas'), where('user_id', '==', user.uid));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const data = snap.docs[0].data() as any;
+          if (data.role !== 'admin') {
+            setAuthError('Acceso denegado: Solo administradores pueden acceder a este panel.');
+            setLoading(false);
+            return;
+          }
+          setUserProfile(data);
+          setInstitutionId(data.institution_id || null);
+
+          if (data.institution_id) {
+            const instSnap = await getDoc(doc(db, 'institutions', data.institution_id));
+            if (instSnap.exists()) {
+              const instData = instSnap.data();
+              setInstitutionName(instData.name || '');
+              setMensajeDia(instData.config?.mensaje_dia || '');
+              setDepartamentosStr((instData.config?.departamentos || ['OIRS', 'Atención General']).join(', '));
+              setOirsDepartamento(instData.config?.oirs_departamento || 'OIRS');
+              setWebhookUrl(instData.config?.n8n_webhook_url || '');
+            }
+            await loadFuncionarios(data.institution_id);
+          }
+          setLoading(false);
+        } else {
+          setLoading(false);
+        }
+      } else {
+        setLoading(false);
       }
     });
 
-    // Cargar funcionarios
-    const fetchFuncionarios = async () => {
-      const snap = await getDocs(collection(db, 'especialistas'));
-      setFuncionarios(snap.docs.map(d => ({id: d.id, ...d.data()})));
-    };
-    fetchFuncionarios();
+    return () => unsubscribe();
+  }, []);
 
-    // Suscribirse a turnos para tiempo real
+  useEffect(() => {
+    if (!institutionId) return;
     const unsubTurnos = onSnapshot(collection(db, 'turnos'), () => {
       fetchStats();
     });
+    fetchStats();
+    return () => unsubTurnos();
+  }, [institutionId]);
 
-    fetchStats().then(() => setLoading(false));
-
-    return () => {
-      unsubConfig();
-      unsubTurnos();
-    };
-  }, []);
+  const loadFuncionarios = async (instId: string) => {
+    const q = query(collection(db, 'especialistas'), where('institution_id', '==', instId));
+    const snap = await getDocs(q);
+    setFuncionarios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  };
 
   const fetchStats = async () => {
+    if (!institutionId) return;
     try {
-      const turnosRef = collection(db, 'turnos');
-      
-      // En espera
-      const qWait = query(turnosRef, where('estado', '==', 'espera'));
+      const qWait = query(
+        collection(db, 'turnos'),
+        where('estado', '==', 'espera'),
+        where('institution_id', '==', institutionId)
+      );
       const waitSnap = await getDocs(qWait);
-      
-      // Atendidos
-      const qAttended = query(turnosRef, where('estado', '==', 'atendido'));
+
+      const qAttended = query(
+        collection(db, 'turnos'),
+        where('estado', '==', 'atendido'),
+        where('institution_id', '==', institutionId)
+      );
       const attSnap = await getDocs(qAttended);
 
       let totalEspera = 0;
@@ -86,25 +138,83 @@ export default function AdminPage() {
         tiempoPromedioEspera: count ? Math.round(totalEspera / count) : 0,
         tiempoPromedioAtencion: count ? Math.round(totalAtencion / count) : 0,
       });
-
     } catch (e) {
       console.error(e);
     }
   };
 
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setAuthError('');
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err: any) {
+      setAuthError(err.message || 'Error al iniciar sesión.');
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    router.push('/');
+  };
+
   const saveConfig = async () => {
+    if (!institutionId) return;
     setSavingConfig(true);
     try {
-      await setDoc(doc(db, 'configuracion', 'global'), { 
-        mensaje_dia: mensajeDia,
-        departamentos: departamentosStr.split(',').map(s => s.trim()).filter(Boolean),
-        n8n_webhook_url: webhookUrl.trim()
-      }, { merge: true });
+      await updateDoc(doc(db, 'institutions', institutionId), {
+        config: {
+          mensaje_dia: mensajeDia,
+          departamentos: departamentosStr.split(',').map(s => s.trim()).filter(Boolean),
+          oirs_departamento: oirsDepartamento.trim(),
+          n8n_webhook_url: webhookUrl.trim(),
+        }
+      });
       alert("Configuración guardada");
     } catch (e) {
       console.error(e);
+      alert("Error al guardar configuración");
     } finally {
       setSavingConfig(false);
+    }
+  };
+
+  const handleRegisterFuncionario = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!institutionId) return;
+    setNewFuncMessage('');
+
+    try {
+      const { createUserWithEmailAndPassword } = await import('firebase/auth');
+      const userCred = await createUserWithEmailAndPassword(auth, newFuncEmail, newFuncPassword);
+
+      const role = newUserRole;
+      await setDoc(doc(db, 'especialistas', userCred.user.uid), {
+        user_id: userCred.user.uid,
+        institution_id: institutionId,
+        role: role,
+        nombre: newFuncName || (role === 'admin' ? 'Administrador' : 'Funcionario'),
+        departamento: role === 'admin' ? 'Administración' : newFuncDepto,
+        cargo: newFuncCargo || (role === 'admin' ? 'Administrador' : 'Funcionario'),
+        estado_funcionario: 'inactivo',
+        avatar_url: '',
+        letra_atencion: newFuncLetra || newFuncEmail.split('@')[0].toUpperCase().substring(0, 2),
+        whatsapp_phone: '',
+        whatsapp_apikey: '',
+      });
+
+      const roleLabel = role === 'admin' ? 'Administrador' : 'Funcionario';
+      setNewFuncMessage(`${roleLabel} ${newFuncName} registrado exitosamente.`);
+      setNewFuncEmail('');
+      setNewFuncPassword('');
+      setNewFuncName('');
+      setNewFuncCargo('');
+      setNewFuncLetra('');
+      await loadFuncionarios(institutionId);
+    } catch (err: any) {
+      setNewFuncMessage(`Error: ${err.message}`);
     }
   };
 
@@ -152,8 +262,10 @@ export default function AdminPage() {
   };
 
   const handleExportUsuarios = async () => {
+    if (!institutionId) return;
     try {
-      const snap = await getDocs(collection(db, 'usuarios'));
+      const q = query(collection(db, 'usuarios'), where('institution_id', '==', institutionId));
+      const snap = await getDocs(q);
       const data = snap.docs.map(d => {
         const docData = d.data();
         return {
@@ -168,16 +280,22 @@ export default function AdminPage() {
   };
 
   const handleExportTurnos = async () => {
+    if (!institutionId) return;
     try {
-      const q = query(collection(db, 'turnos'), orderBy('created_at', 'desc'));
+      const q = query(
+        collection(db, 'turnos'),
+        where('institution_id', '==', institutionId),
+        orderBy('created_at', 'desc')
+      );
       const snap = await getDocs(q);
       const data = snap.docs.map(d => {
         const t = d.data();
         return {
           ID_Turno: d.id,
           Estado: t.estado,
-          RUT_Usuario: t.usuario_id || '',
-          Departamento: t.departamento || '',
+          RUT_Usuario: t.rut_usuario || '',
+          Departamento: t.departamento_solicitado || '',
+          Prioridad: t.is_appointment ? 'Alta (Cita)' : 'Normal',
           Funcionario: t.nombre_funcionario || '',
           Cargo: t.cargo_funcionario || '',
           Modulo: t.letra_especialista || '',
@@ -193,29 +311,71 @@ export default function AdminPage() {
   };
 
   const handleExportFuncionarios = () => {
-    const data = funcionarios.map(f => ({
+    const data = funcionarios.map((f: any) => ({
       Nombre: f.nombre || '',
+      Rol: f.role || 'funcionario',
       Departamento: f.departamento || '',
       Cargo: f.cargo || '',
-      Modulo: f.letra_atencion || ''
+      Modulo: f.letra_atencion || '',
+      Estado: f.estado_funcionario || 'inactivo'
     }));
     exportToCSV('funcionarios_filapp.csv', data);
   };
 
-  if (loading) return <div className={styles.centerLoad}>Cargando panel de administración...</div>;
+  if (loading && !session) {
+    return <div className={styles.centerLoad}>Cargando panel de administración...</div>;
+  }
+
+  if (!session) {
+    return (
+      <main className={styles.authContainer}>
+        <form onSubmit={handleLogin} className={styles.authCard}>
+          <h2>Acceso Administración</h2>
+          <p>Ingrese con credenciales de administrador.</p>
+          {authError && <div className={styles.errorBanner}>{authError}</div>}
+          <div className={styles.inputGroup}>
+            <label>Correo Electrónico</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+          </div>
+          <div className={styles.inputGroup}>
+            <label>Contraseña</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+          </div>
+          <button type="submit" className={styles.primaryBtn} disabled={loading}>
+            {loading ? 'Ingresando...' : 'Iniciar Sesión'}
+          </button>
+        </form>
+      </main>
+    );
+  }
+
+  if (authError) {
+    return <div className={styles.centerLoad}>{authError}</div>;
+  }
+
+  const departamentosList = departamentosStr.split(',').map(s => s.trim()).filter(Boolean);
+
+  if (loading) return <div className={styles.centerLoad}>Cargando...</div>;
 
   return (
     <div className={styles.adminContainer}>
       <header className={styles.header}>
         <div className={styles.titleGroup}>
           <Settings size={28} />
-          <h1>Panel de Administración Global</h1>
+          <div>
+            <h1>Panel de Administración</h1>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              <Building2 size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+              {institutionName || 'Institución'}
+            </span>
+          </div>
         </div>
+        <button onClick={handleLogout} className={styles.logoutBtn}>
+          <LogOut size={18} /> Salir
+        </button>
       </header>
 
       <main className={styles.content}>
-        
-        {/* KPI Cards */}
         <section className={styles.kpiGrid}>
           <div className={styles.kpiCard}>
             <div className={styles.kpiHeader}>
@@ -224,7 +384,7 @@ export default function AdminPage() {
             </div>
             <div className={styles.kpiValue}>{stats.enEspera}</div>
           </div>
-          
+
           <div className={styles.kpiCard}>
             <div className={styles.kpiHeader}>
               <span>Atendidos Hoy</span>
@@ -252,12 +412,11 @@ export default function AdminPage() {
         </section>
 
         <div className={styles.bottomGrid}>
-          {/* Configuración */}
           <section className={styles.configSection}>
-            <h2>Configuración Global</h2>
+            <h2>Configuración de la Institución</h2>
             <div className={styles.formGroup}>
               <label>Mensaje del Día (TV)</label>
-              <textarea 
+              <textarea
                 rows={2}
                 value={mensajeDia}
                 onChange={e => setMensajeDia(e.target.value)}
@@ -265,122 +424,125 @@ export default function AdminPage() {
               />
             </div>
             <div className={styles.formGroup}>
-              <label>Departamentos (Separados por coma)</label>
-              <input 
+              <label>Categorías / Departamentos (Separados por coma)</label>
+              <input
                 type="text"
                 value={departamentosStr}
                 onChange={e => setDepartamentosStr(e.target.value)}
-                placeholder="Ej: OMIL, DIDECO, SALUD"
+                placeholder="Ej: OIRS, Atención General, DIDECO"
+              />
+            </div>
+            <div className={styles.formGroup}>
+              <label>Departamento OIRS (Orientación)</label>
+              <input
+                type="text"
+                value={oirsDepartamento}
+                onChange={e => setOirsDepartamento(e.target.value)}
+                placeholder="OIRS"
               />
             </div>
             <div className={styles.formGroup}>
               <label>Webhook URL (n8n)</label>
-              <input 
+              <input
                 type="url"
                 value={webhookUrl}
                 onChange={e => setWebhookUrl(e.target.value)}
                 placeholder="https://tu-n8n.com/webhook/..."
               />
             </div>
-            <button 
-              className={styles.primaryBtn} 
-              onClick={saveConfig}
-              disabled={savingConfig}
-            >
+            <button className={styles.primaryBtn} onClick={saveConfig} disabled={savingConfig}>
               {savingConfig ? 'Guardando...' : 'Guardar Configuración'}
             </button>
           </section>
 
-          {/* Gestión de Funcionarios */}
-          <section className={styles.chartSection} style={{overflowX: 'auto'}}>
-            <h2>Gestión de Funcionarios por Departamento</h2>
-            
-            {departamentosStr.split(',').map(s => s.trim()).filter(Boolean).map(depto => {
-              const funcs = funcionarios.filter(f => f.departamento === depto);
-              return (
-                <div key={depto} className={styles.deptoGroup}>
-                  <h3 className={styles.deptoTitle}>{depto}</h3>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr>
-                        <th style={{width: '100px'}}>Perfil</th>
-                        <th>Nombre</th>
-                        <th>Cargo o Función</th>
-                        <th>Módulo</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {funcs.map(f => (
-                        <tr key={f.id}>
-                          <td>
-                            <div className={styles.adminProfileCell}>
-                              <div className={styles.adminAvatarWrapper}>
-                                {f.avatar_url ? (
-                                  <img src={f.avatar_url} alt="Avatar" className={styles.adminAvatarImg} />
-                                ) : (
-                                  <div className={styles.adminAvatarPlaceholder}>
-                                    {f.nombre?.substring(0, 2).toUpperCase() || 'FN'}
-                                  </div>
-                                )}
-                              </div>
-                              <span 
-                                className={styles.statusDot} 
-                                data-status={f.estado_funcionario || 'inactivo'}
-                                title={`Estado: ${f.estado_funcionario || 'inactivo'}`}
-                              />
-                            </div>
-                          </td>
-                          <td>
-                            <input 
-                              className={styles.tableInput}
-                              value={f.nombre || ''} 
-                              onChange={e => updateFuncionario(f.id, 'nombre', e.target.value)} 
-                              placeholder="Nombre Funcionario"
-                            />
-                          </td>
-                          <td>
-                            <input 
-                              className={styles.tableInput}
-                              value={f.cargo || ''} 
-                              onChange={e => updateFuncionario(f.id, 'cargo', e.target.value)} 
-                              placeholder="Psicólogo, Asistente..."
-                            />
-                          </td>
-                          <td>
-                            <input 
-                              className={styles.tableInput}
-                              value={f.letra_atencion || ''} 
-                              onChange={e => updateFuncionario(f.id, 'letra_atencion', e.target.value)} 
-                              placeholder="A"
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                      {funcs.length === 0 && (
-                        <tr><td colSpan={4}>Sin funcionarios registrados en este departamento.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })}
+          <section className={styles.configSection}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: 'var(--spacing-4)' }}>
+              <UserPlus size={20} />
+              <h2 style={{ margin: 0, marginBottom: 0 }}>Registrar Usuario</h2>
+            </div>
 
-            {/* Funcionarios sin departamento o con departamento eliminado */}
-            {funcionarios.filter(f => !departamentosStr.split(',').map(s => s.trim()).includes(f.departamento)).length > 0 && (
-              <div className={styles.deptoGroup}>
-                <h3 className={styles.deptoTitle} style={{color: 'var(--destructive)'}}>Otros / Sin Asignar</h3>
+            <div className={styles.roleToggle}>
+              <button
+                type="button"
+                className={`${styles.roleToggleBtn} ${newUserRole === 'funcionario' ? styles.roleToggleActive : ''}`}
+                onClick={() => setNewUserRole('funcionario')}
+              >
+                Funcionario
+              </button>
+              <button
+                type="button"
+                className={`${styles.roleToggleBtn} ${newUserRole === 'admin' ? styles.roleToggleActive : ''}`}
+                onClick={() => setNewUserRole('admin')}
+              >
+                Administrador
+              </button>
+            </div>
+
+            <form onSubmit={handleRegisterFuncionario} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}>
+              {newFuncMessage && (
+                <div className={newFuncMessage.startsWith('Error') ? styles.errorBanner : styles.successBanner}>
+                  {newFuncMessage}
+                </div>
+              )}
+              <div className={styles.formGroup}>
+                <label>Correo Electrónico</label>
+                <input type="email" value={newFuncEmail} onChange={e => setNewFuncEmail(e.target.value)} placeholder={newUserRole === 'admin' ? 'admin@institucion.cl' : 'funcionario@institucion.cl'} required />
+              </div>
+              <div className={styles.formGroup}>
+                <label>Contraseña</label>
+                <input type="password" value={newFuncPassword} onChange={e => setNewFuncPassword(e.target.value)} placeholder="Contraseña temporal" minLength={6} required />
+              </div>
+              <div className={styles.formGroup}>
+                <label>Nombre Completo</label>
+                <input type="text" value={newFuncName} onChange={e => setNewFuncName(e.target.value)} placeholder={newUserRole === 'admin' ? 'Ej: Juan Pérez (Administrador)' : 'Ej: María García'} required />
+              </div>
+              {newUserRole === 'funcionario' && (
+                <>
+                  <div className={styles.formGroup}>
+                    <label>Departamento</label>
+                    <select value={newFuncDepto} onChange={e => setNewFuncDepto(e.target.value)} required style={{ padding: 'var(--spacing-3)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', background: 'var(--surface-hover)', color: 'var(--text-primary)' }}>
+                      <option value="">Seleccionar...</option>
+                      {departamentosList.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label>Cargo o Función</label>
+                    <input type="text" value={newFuncCargo} onChange={e => setNewFuncCargo(e.target.value)} placeholder="Ej: Psicólogo, Asistente Social" />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label>Módulo / Letra de Atención</label>
+                    <input type="text" value={newFuncLetra} onChange={e => setNewFuncLetra(e.target.value)} placeholder="Ej: A, B, Box 1" />
+                  </div>
+                </>
+              )}
+              <button type="submit" className={styles.primaryBtn}>
+                Registrar {newUserRole === 'admin' ? 'Administrador' : 'Funcionario'}
+              </button>
+            </form>
+          </section>
+        </div>
+
+        <section className={styles.chartSection} style={{ marginTop: 'var(--spacing-6)', overflowX: 'auto' }}>
+          <h2>Gestión de Funcionarios por Departamento</h2>
+
+          {departamentosList.map(depto => {
+            const funcs = funcionarios.filter((f: any) => f.departamento === depto);
+            return (
+              <div key={depto} className={styles.deptoGroup}>
+                <h3 className={styles.deptoTitle}>{depto}</h3>
                 <table className={styles.table}>
                   <thead>
                     <tr>
                       <th style={{width: '100px'}}>Perfil</th>
                       <th>Nombre</th>
-                      <th>Cargo o Función</th>
-                      <th>Departamento Actual</th>
+                      <th>Rol</th>
+                      <th>Cargo</th>
                       <th>Módulo</th>
+                      <th>Estado</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {funcionarios.filter(f => !departamentosStr.split(',').map(s => s.trim()).includes(f.departamento)).map(f => (
+                    {funcs.map((f: any) => (
                       <tr key={f.id}>
                         <td>
                           <div className={styles.adminProfileCell}>
@@ -393,53 +555,88 @@ export default function AdminPage() {
                                 </div>
                               )}
                             </div>
-                            <span 
-                              className={styles.statusDot} 
-                              data-status={f.estado_funcionario || 'inactivo'}
-                              title={`Estado: ${f.estado_funcionario || 'inactivo'}`}
-                            />
+                            <span className={styles.statusDot} data-status={f.estado_funcionario || 'inactivo'} />
                           </div>
                         </td>
                         <td>
                           <input className={styles.tableInput} value={f.nombre || ''} onChange={e => updateFuncionario(f.id, 'nombre', e.target.value)} />
                         </td>
                         <td>
-                          <input className={styles.tableInput} value={f.cargo || ''} onChange={e => updateFuncionario(f.id, 'cargo', e.target.value)} />
+                          <span className={styles.roleChip} data-role={f.role}>{f.role}</span>
                         </td>
                         <td>
-                          <input className={styles.tableInput} value={f.departamento || ''} onChange={e => updateFuncionario(f.id, 'departamento', e.target.value)} />
+                          <input className={styles.tableInput} value={f.cargo || ''} onChange={e => updateFuncionario(f.id, 'cargo', e.target.value)} />
                         </td>
                         <td>
                           <input className={styles.tableInput} value={f.letra_atencion || ''} onChange={e => updateFuncionario(f.id, 'letra_atencion', e.target.value)} />
                         </td>
+                        <td>{f.estado_funcionario || 'inactivo'}</td>
                       </tr>
                     ))}
+                    {funcs.length === 0 && (
+                      <tr><td colSpan={6}>Sin funcionarios en este departamento.</td></tr>
+                    )}
                   </tbody>
                 </table>
               </div>
-            )}
-          </section>
-        </div>
+            );
+          })}
 
-        {/* Sección de Exportación */}
+          {funcionarios.filter((f: any) => !departamentosList.includes(f.departamento)).length > 0 && (
+            <div className={styles.deptoGroup}>
+              <h3 className={styles.deptoTitle} style={{color: 'var(--destructive)'}}>Otros / Sin Asignar</h3>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Perfil</th>
+                    <th>Nombre</th>
+                    <th>Rol</th>
+                    <th>Cargo</th>
+                    <th>Departamento</th>
+                    <th>Módulo</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {funcionarios.filter((f: any) => !departamentosList.includes(f.departamento)).map((f: any) => (
+                    <tr key={f.id}>
+                      <td>
+                        <div className={styles.adminProfileCell}>
+                          <div className={styles.adminAvatarWrapper}>
+                            {f.avatar_url ? <img src={f.avatar_url} alt="Avatar" className={styles.adminAvatarImg} />
+                            : <div className={styles.adminAvatarPlaceholder}>{f.nombre?.substring(0, 2).toUpperCase() || 'FN'}</div>}
+                          </div>
+                          <span className={styles.statusDot} data-status={f.estado_funcionario || 'inactivo'} />
+                        </div>
+                      </td>
+                      <td><input className={styles.tableInput} value={f.nombre || ''} onChange={e => updateFuncionario(f.id, 'nombre', e.target.value)} /></td>
+                      <td><span className={styles.roleChip} data-role={f.role}>{f.role}</span></td>
+                      <td><input className={styles.tableInput} value={f.cargo || ''} onChange={e => updateFuncionario(f.id, 'cargo', e.target.value)} /></td>
+                      <td><input className={styles.tableInput} value={f.departamento || ''} onChange={e => updateFuncionario(f.id, 'departamento', e.target.value)} /></td>
+                      <td><input className={styles.tableInput} value={f.letra_atencion || ''} onChange={e => updateFuncionario(f.id, 'letra_atencion', e.target.value)} /></td>
+                      <td>{f.estado_funcionario || 'inactivo'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
         <section className={styles.exportSection}>
           <h2>Reportes y Exportación de Datos</h2>
           <div className={styles.exportGroup}>
             <button className={styles.exportBtn} onClick={handleExportUsuarios}>
-              <Download size={20} />
-              Exportar Usuarios (CSV)
+              <Download size={20} /> Exportar Usuarios (CSV)
             </button>
             <button className={styles.exportBtn} onClick={handleExportTurnos}>
-              <Download size={20} />
-              Exportar Turnos e Historial (CSV)
+              <Download size={20} /> Exportar Turnos e Historial (CSV)
             </button>
             <button className={styles.exportBtn} onClick={handleExportFuncionarios}>
-              <Download size={20} />
-              Exportar Funcionarios (CSV)
+              <Download size={20} /> Exportar Funcionarios (CSV)
             </button>
           </div>
         </section>
-
       </main>
     </div>
   );

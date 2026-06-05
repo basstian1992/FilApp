@@ -11,17 +11,23 @@ export async function POST(request: Request) {
       );
     }
 
-    // Clean any accidental spaces or characters
-    const cleanPhone = phone.toString().replace(/[^0-9]/g, '');
+    // Keep the + sign if the user typed it (CallMeBot sometimes needs it)
+    const cleanPhone = phone.toString().replace(/[^0-9+]/g, '');
     const cleanApiKey = apikey.toString().trim();
     
-    // CallMeBot requires URL encoding for the message
+    // CallMeBot requires URL encoding
     const encodedMessage = encodeURIComponent(message);
+    const encodedPhone = encodeURIComponent(cleanPhone);
 
-    const url = `https://api.callmebot.com/whatsapp.php?phone=${cleanPhone}&text=${encodedMessage}&apikey=${cleanApiKey}`;
+    const url = `https://api.callmebot.com/whatsapp.php?phone=${encodedPhone}&text=${encodedMessage}&apikey=${cleanApiKey}`;
 
     const response = await fetch(url, {
-      method: 'GET' // CallMeBot uses GET requests
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
+      }
     });
 
     const data = await response.text();
@@ -29,8 +35,9 @@ export async function POST(request: Request) {
     if (response.ok && !data.includes('Error')) {
       return NextResponse.json({ success: true, data });
     } else {
+      console.error('CallMeBot Error:', data);
       return NextResponse.json(
-        { error: 'Error de CallMeBot al enviar el mensaje de WhatsApp. Verifique sus credenciales.' },
+        { error: `Error de CallMeBot: ${data}` },
         { status: 500 }
       );
     }

@@ -3,166 +3,139 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at center, var(--surface-hover), var(--bg-color));
-  padding: var(--spacing-4);
+  background: radial-gradient(ellipse at center, var(--surface-hover), var(--bg-color));
+  padding: 1rem;
 }
 
 .glassPanel {
   background: var(--surface-color);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
-  padding: var(--spacing-8);
+  padding: 2.5rem;
   width: 100%;
-  max-width: 600px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  max-width: 560px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: var(--spacing-6);
+  gap: 1.5rem;
 }
 
 .title {
-  font-size: 2.5rem;
+  font-size: 2rem;
   font-weight: 800;
   color: var(--primary);
-  margin-bottom: var(--spacing-2);
+  margin: 0;
 }
 
 .subtitle {
-  font-size: 1.25rem;
+  font-size: 1.05rem;
   color: var(--text-secondary);
+  margin: 0;
 }
 
-.inputDisplay {
+/* ===== MENU ===== */
+
+.menuGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
   width: 100%;
-  padding: var(--spacing-4);
-  font-size: 3rem;
-  font-weight: bold;
-  letter-spacing: 0.1em;
+  margin-top: 0.5rem;
+}
+
+.menuBtn {
   background: var(--surface-hover);
   border: 2px solid var(--border-color);
-  border-radius: var(--radius-lg);
   color: var(--text-primary);
-  min-height: 90px;
+  padding: 1.5rem 1rem;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  text-align: left;
+}
+
+.menuBtn:hover {
+  border-color: var(--primary);
+  background: var(--surface-color);
+  transform: translateX(4px);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.08);
+}
+
+.menuIconWrap {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-color);
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.keypad {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--spacing-3);
-  width: 100%;
-}
-
-.keyBtn {
-  background: var(--surface-hover);
-  color: var(--text-primary);
+  font-size: 1.5rem;
+  flex-shrink: 0;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  font-size: 2rem;
-  font-weight: 600;
-  padding: var(--spacing-4) 0;
-  transition: all var(--transition-fast);
 }
 
-.keyBtn:hover {
+.menuBtn:hover .menuIconWrap {
   background: var(--primary);
-  color: var(--primary-foreground);
   border-color: var(--primary);
 }
 
-.keyBtn:active {
-  transform: scale(0.95);
+.menuBtn:hover .menuIconWrap span {
+  filter: brightness(10);
 }
 
-.primaryBtn {
-  width: 100%;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  font-size: 1.5rem;
-  font-weight: bold;
-  padding: var(--spacing-4);
-  border-radius: var(--radius-lg);
-  transition: all var(--transition-fast);
+.menuContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
 }
 
-.primaryBtn:hover:not(:disabled) {
-  background: var(--primary-hover);
-  transform: translateY(-2px);
-  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.4);
-}
-
-.primaryBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Ticket View */
-.ticketView {
-  animation: popIn var(--transition-bounce);
-}
-
-@keyframes popIn {
-  0% { transform: scale(0.8); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-.successTitle {
-  font-size: 2.5rem;
-  font-weight: 800;
-  color: var(--success);
-}
-
-.instruction {
-  font-size: 1.25rem;
-  color: var(--text-secondary);
-}
-
-.ticketNumber {
-  font-size: 8rem;
-  font-weight: 900;
+.menuLabel {
+  font-size: 1.1rem;
+  font-weight: 700;
   color: var(--text-primary);
-  line-height: 1;
-  margin: var(--spacing-4) 0;
-  text-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
 
-.autoCloseText {
+.menuDesc {
+  font-size: 0.8rem;
   color: var(--text-secondary);
-  font-size: 1rem;
-  margin-top: var(--spacing-4);
-  animation: pulse 2s infinite;
 }
 
-.ticketDepto {
-  font-size: 1.5rem;
-  color: var(--text-secondary);
-  margin-top: -1rem;
-  margin-bottom: var(--spacing-4);
+@media (min-width: 500px) {
+  .menuGrid {
+    grid-template-columns: 1fr;
+  }
 }
+
+/* ===== CATEGORY / FUNCTIONARY GRID ===== */
 
 .deptoGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--spacing-4);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
   width: 100%;
-  margin-top: var(--spacing-6);
+  margin-top: 0.5rem;
 }
 
 .deptoBtn {
   background: var(--surface-hover);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: var(--spacing-6);
+  padding: 1.25rem 1rem;
   border-radius: var(--radius-lg);
-  font-size: 1.25rem;
-  font-weight: bold;
+  font-size: 1rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: all var(--transition-normal);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
 }
 
 .deptoBtn:hover {
@@ -170,30 +143,39 @@
   color: white;
   border-color: var(--primary);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-premium);
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.15);
 }
+
+/* ===== BACK BUTTON ===== */
 
 .backBtn {
   background: none;
   border: none;
   color: var(--text-secondary);
-  font-size: 1.1rem;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
   align-self: flex-start;
-  margin-bottom: var(--spacing-2);
-  transition: color 0.2s;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
 }
 
 .backBtn:hover {
   color: var(--primary);
+  background: rgba(37, 99, 235, 0.04);
 }
+
+/* ===== RUT INPUT ===== */
 
 .realInput {
   width: 100%;
-  padding: var(--spacing-4);
-  font-size: 3rem;
-  font-weight: bold;
+  padding: 0.85rem 1rem;
+  font-size: 2rem;
+  font-weight: 700;
   letter-spacing: 0.1em;
   background: var(--surface-hover);
   border: 2px solid var(--border-color);
@@ -202,17 +184,152 @@
   text-align: center;
   outline: none;
   transition: border-color 0.2s;
+  font-family: 'Inter', monospace;
 }
 
 .realInput:focus {
   border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* ===== KEYPAD ===== */
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.keyBtn {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 1.5rem;
+  font-weight: 700;
+  padding: 1rem 0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.keyBtn:hover {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+  transform: scale(1.03);
+}
+
+.keyBtn:active {
+  transform: scale(0.95);
 }
 
 .delBtn {
-  grid-column: span 3;
+  grid-column: span 1;
   background: var(--surface-color);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--destructive);
+}
+
+.delBtn:hover {
+  background: var(--destructive);
+  color: white;
+  border-color: var(--destructive);
 }
 
 .clearBtn {
   color: var(--destructive);
+}
+
+.primaryBtn {
+  width: 100%;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 1.15rem;
+  font-weight: 700;
+  padding: 1rem;
+  border-radius: var(--radius-lg);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.primaryBtn:hover:not(:disabled) {
+  background: var(--primary-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35);
+}
+
+.primaryBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ===== TICKET VIEW ===== */
+
+.ticketView {
+  animation: popIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.85); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.successTitle {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--success);
+  margin: 0;
+}
+
+.instruction {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.ticketNumber {
+  font-size: 6rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  text-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+
+.ticketDepto {
+  font-size: 1.25rem;
+  color: var(--text-secondary);
+  margin-top: -0.5rem;
+}
+
+.priorityBadge {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--accent);
+  padding: 0.4rem 1.25rem;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: 0.9rem;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.autoCloseText {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* ===== DARK MODE ADJUSTMENTS ===== */
+
+@media (prefers-color-scheme: dark) {
+  .menuBtn:hover {
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.15);
+  }
 }

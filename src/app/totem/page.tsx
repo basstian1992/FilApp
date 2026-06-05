@@ -1,19 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import styles from './totem.module.css';
 import { db } from '@/lib/firebase/client';
-import { collection, doc, runTransaction, setDoc, getDoc } from 'firebase/firestore';
+import { collection, doc, runTransaction, setDoc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { triggerWebhook } from '@/lib/notify';
 
-// Utilidad para validar RUT Chileno (Módulo 11)
 function validateRUT(rut: string) {
   if (!/^[0-9]+[-|‐]{1}[0-9kK]{1}$/.test(rut)) return false;
   const tmp = rut.split('-');
   let digv = tmp[1].toLowerCase();
   const rutNum = tmp[0];
   if (digv === 'k') digv = 'k';
-  
+
   let M = 0, S = 1;
   let num = parseInt(rutNum, 10);
   for (; num; num = Math.floor(num / 10)) {
@@ -23,28 +23,87 @@ function validateRUT(rut: string) {
   return expectedDv === digv;
 }
 
-export default function TotemPage() {
+type Screen = 'menu' | 'categories' | 'oirs' | 'appointment' | 'rut' | 'ticket';
+
+function TotemInner() {
+  const searchParams = useSearchParams();
+  const institutionId = searchParams.get('institution');
+
+  const [screen, setScreen] = useState<Screen>('menu');
+  const [selectedMode, setSelectedMode] = useState<'general' | 'oirs' | 'appointment' | null>(null);
+  const [selectedFuncionario, setSelectedFuncionario] = useState<any>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+
   const [rut, setRut] = useState('');
   const [loading, setLoading] = useState(false);
-  const [ticket, setTicket] = useState<{ numero: number, letra_ticket: string, departamento: string } | null>(null);
+  const [ticket, setTicket] = useState<{ numero: number; letra_ticket: string; departamento: string; priority: boolean } | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
-  
-  const [departamentos, setDepartamentos] = useState<string[]>(['DIDECO', 'OMIL', 'PRODESAL', 'P.M. Jefas de Hogar', 'Turismo', 'OTEC', 'Fomento', 'Otro']);
-  const [selectedDepto, setSelectedDepto] = useState<string | null>(null);
+
+  const [categories, setCategories] = useState<string[]>([]);
+  const [funcionarios, setFuncionarios] = useState<any[]>([]);
+  const [oirsDepartamento, setOirsDepartamento] = useState('OIRS');
+  const [configLoaded, setConfigLoaded] = useState(false);
+
+  const institutionIdRef = useRef(institutionId);
+
+  useEffect(() => {
+    institutionIdRef.current = institutionId;
+  }, [institutionId]);
 
   useEffect(() => {
     const fetchConfig = async () => {
+      if (!institutionId) return;
       try {
-        const snap = await getDoc(doc(db, 'configuracion', 'global'));
-        if (snap.exists() && snap.data().departamentos) {
-          setDepartamentos(snap.data().departamentos);
+        const instSnap = await getDoc(doc(db, 'institutions', institutionId));
+        if (instSnap.exists()) {
+          const data = instSnap.data();
+          const config = data.config || {};
+          setCategories(config.departamentos || ['Atención General']);
+          setOirsDepartamento(config.oirs_departamento || 'OIRS');
+          setConfigLoaded(true);
         }
+
+        const funcSnap = await getDocs(query(
+          collection(db, 'especialistas'),
+          where('institution_id', '==', institutionId),
+          where('role', '==', 'funcionario')
+        ));
+        setFuncionarios(funcSnap.docs.map(d => ({ id: d.id, ...d.data() })));
       } catch (e) {
         console.error(e);
+        setCategories(['Atención General']);
+        setConfigLoaded(true);
       }
     };
     fetchConfig();
-  }, []);
+  }, [institutionId]);
+
+  const resetFlow = () => {
+    setScreen('menu');
+    setSelectedMode(null);
+    setSelectedFuncionario(null);
+    setSelectedCategory('');
+    setRut('');
+    setTicket(null);
+    setErrorMsg('');
+  };
+
+  const handleModeSelect = (mode: 'general' | 'oirs' | 'appointment') => {
+    setSelectedMode(mode);
+    if (mode === 'general') setScreen('categories');
+    else if (mode === 'oirs') setScreen('oirs');
+    else if (mode === 'appointment') setScreen('appointment');
+  };
+
+  const handleCategorySelect = (cat: string) => {
+    setSelectedCategory(cat);
+    setScreen('rut');
+  };
+
+  const handleFuncionarioSelect = (f: any) => {
+    setSelectedFuncionario(f);
+    setScreen('rut');
+  };
 
   const handleKeypad = (val: string) => {
     setErrorMsg('');
@@ -65,8 +124,9 @@ export default function TotemPage() {
   };
 
   const handleSubmit = async () => {
-    if (!rut) return;
-    
+    const instId = institutionIdRef.current;
+    if (!rut || !instId) return;
+
     const formattedRut = formatRutUI(rut);
     if (!validateRUT(formattedRut)) {
       setErrorMsg('RUT Inválido. Intente nuevamente.');
@@ -77,39 +137,44 @@ export default function TotemPage() {
     setErrorMsg('');
 
     try {
-      // 1. Upsert User in Firestore
       const userRef = doc(db, 'usuarios', formattedRut);
       const userSnap = await getDoc(userRef);
       if (!userSnap.exists()) {
-        await setDoc(userRef, { rut: formattedRut, created_at: new Date().toISOString() });
+        await setDoc(userRef, { rut: formattedRut, institution_id: instId, created_at: new Date().toISOString() });
       }
 
-      // 2. Transaction to get incremented Turno
-      const configRef = doc(db, 'configuracion', 'global');
+      const instRef = doc(db, 'institutions', instId);
       const turnoRef = doc(collection(db, 'turnos'));
-      
+
       let newNumero = 1;
-      let letraTicket = selectedDepto ? selectedDepto.charAt(0).toUpperCase() : 'T';
-      
+      const isAppointment = selectedMode === 'appointment';
+      const departamento = selectedMode === 'oirs'
+        ? oirsDepartamento
+        : selectedMode === 'appointment'
+          ? (selectedFuncionario?.departamento || 'Hora Agendada')
+          : selectedCategory;
+
+      let letraTicket = departamento.charAt(0).toUpperCase();
+      if (selectedMode === 'appointment' && selectedFuncionario) {
+        letraTicket = selectedFuncionario.letra_atencion || departamento.charAt(0).toUpperCase();
+      }
+
       await runTransaction(db, async (transaction) => {
-        const configDoc = await transaction.get(configRef);
-        
+        const instDoc = await transaction.get(instRef);
         const now = new Date();
         const resetTime = new Date();
         resetTime.setHours(7, 30, 0, 0);
-        
+
         let currentNumero = 0;
         let lastReset = null;
-        const turnosKey = `currentTurno_${selectedDepto || 'general'}`;
 
-        if (!configDoc.exists()) {
-          transaction.set(configRef, { [turnosKey]: 0, mensaje_dia: 'Bienvenidos' });
+        if (!instDoc.exists()) {
+          transaction.set(instRef, { currentTurno: 0, ultimo_reinicio: null }, { merge: true });
         } else {
-          currentNumero = configDoc.data()[turnosKey] || 0;
-          lastReset = configDoc.data().ultimo_reinicio || null;
+          currentNumero = instDoc.data()?.currentTurno || 0;
+          lastReset = instDoc.data()?.ultimo_reinicio || null;
         }
-        
-        // Reset Logic
+
         if (now >= resetTime) {
           if (!lastReset || new Date(lastReset) < resetTime) {
             currentNumero = 0;
@@ -123,32 +188,45 @@ export default function TotemPage() {
             lastReset = now.toISOString();
           }
         }
-        
+
         newNumero = currentNumero + 1;
-        transaction.update(configRef, { [turnosKey]: newNumero, ultimo_reinicio: lastReset });
-        
+        transaction.update(instRef, { currentTurno: newNumero, ultimo_reinicio: lastReset });
+
         transaction.set(turnoRef, {
+          institution_id: instId,
           numero: newNumero,
           letra_ticket: letraTicket,
-          departamento_solicitado: selectedDepto,
+          departamento_solicitado: departamento,
           rut_usuario: formattedRut,
           estado: 'espera',
-          created_at: new Date().toISOString()
+          priority_level: isAppointment ? 1 : 0,
+          is_appointment: isAppointment,
+          funcionario_asignado: selectedFuncionario?.user_id || null,
+          nombre_funcionario_asignado: selectedFuncionario?.nombre || null,
+          created_at: new Date().toISOString(),
         });
       });
 
-      setTicket({ numero: newNumero, letra_ticket: letraTicket, departamento: selectedDepto || '' });
-      
-      // Notificar a n8n
-      triggerWebhook('ingreso', { numero: newNumero, rut_usuario: formattedRut });
-      
-      // Auto reset después de 8 segundos
-      setTimeout(() => {
-        setTicket(null);
-        setRut('');
-        setSelectedDepto(null);
-      }, 8000);
-      
+      setTicket({ numero: newNumero, letra_ticket: letraTicket, departamento, priority: isAppointment });
+      setScreen('ticket');
+
+      triggerWebhook('ingreso', {
+        numero: newNumero,
+        rut_usuario: formattedRut,
+        institution_id: instId,
+        is_appointment: isAppointment,
+      });
+
+      const { io } = await import('socket.io-client');
+      const socket = io(window.location.origin);
+      socket.emit('appointment-arrived', {
+        institutionId: instId,
+        funcionarioId: selectedFuncionario?.user_id,
+        ticket: { numero: newNumero, letra_ticket: letraTicket, departamento, rut_usuario: formattedRut },
+      });
+      setTimeout(() => socket.disconnect(), 2000);
+
+      setTimeout(resetFlow, 10000);
     } catch (err: any) {
       console.error(err);
       setErrorMsg('Error al generar el turno.');
@@ -157,22 +235,27 @@ export default function TotemPage() {
     }
   };
 
-  if (ticket) {
+  if (screen === 'ticket' && ticket) {
     return (
       <main className={styles.container}>
         <div className={`${styles.glassPanel} ${styles.ticketView}`}>
           <h1 className={styles.successTitle}>¡Turno Generado!</h1>
           <p className={styles.instruction}>Por favor, espere su llamado en la pantalla.</p>
-          
+
           <div className={styles.ticketNumber}>
             {ticket.letra_ticket}-{ticket.numero}
           </div>
           <div className={styles.ticketDepto}>
             Módulo: {ticket.departamento}
           </div>
-          
+          {ticket.priority && (
+            <div className={styles.priorityBadge}>
+              Prioridad Alta - Hora Agendada
+            </div>
+          )}
+
           <p className={styles.autoCloseText}>Esta pantalla se cerrará automáticamente...</p>
-          <button className={styles.primaryBtn} onClick={() => { setTicket(null); setRut(''); setSelectedDepto(null); }}>
+          <button className={styles.primaryBtn} onClick={resetFlow}>
             Nuevo Turno
           </button>
         </div>
@@ -180,19 +263,120 @@ export default function TotemPage() {
     );
   }
 
-  if (!selectedDepto) {
+  if (screen === 'menu') {
     return (
       <main className={styles.container}>
         <div className={styles.glassPanel}>
           <h1 className={styles.title}>Bienvenido</h1>
-          <p className={styles.subtitle}>Seleccione el módulo al que desea dirigirse</p>
-          
+          <p className={styles.subtitle}>Seleccione el tipo de atención que necesita</p>
+
+          <div className={styles.menuGrid}>
+            <button className={styles.menuBtn} onClick={() => handleModeSelect('general')}>
+              <span className={styles.menuIcon}>&#x1F4CB;</span>
+              <span className={styles.menuLabel}>Atención General</span>
+              <span className={styles.menuDesc}>Orden de llegada</span>
+            </button>
+            <button className={`${styles.menuBtn} ${styles.menuOirs}`} onClick={() => handleModeSelect('oirs')}>
+              <span className={styles.menuIcon}>&#x1F4AC;</span>
+              <span className={styles.menuLabel}>Orientación de Trámites</span>
+              <span className={styles.menuDesc}>Consultas rápidas (OIRS)</span>
+            </button>
+            <button className={`${styles.menuBtn} ${styles.menuAppointment}`} onClick={() => handleModeSelect('appointment')}>
+              <span className={styles.menuIcon}>&#x1F4C5;</span>
+              <span className={styles.menuLabel}>Hora Agendada</span>
+              <span className={styles.menuDesc}>Tengo una cita programada</span>
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (screen === 'categories') {
+    return (
+      <main className={styles.container}>
+        <div className={styles.glassPanel}>
+          <button className={styles.backBtn} onClick={resetFlow}>← Volver</button>
+          <h1 className={styles.title}>Atención General</h1>
+          <p className={styles.subtitle}>Seleccione el motivo de su atención</p>
+
           <div className={styles.deptoGrid}>
-            {departamentos.map(dep => (
-              <button key={dep} className={styles.deptoBtn} onClick={() => setSelectedDepto(dep)}>
-                {dep}
+            {categories.map(cat => (
+              <button key={cat} className={styles.deptoBtn} onClick={() => handleCategorySelect(cat)}>
+                {cat}
               </button>
             ))}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (screen === 'oirs') {
+    return (
+      <main className={styles.container}>
+        <div className={styles.glassPanel}>
+          <button className={styles.backBtn} onClick={resetFlow}>← Volver</button>
+          <h1 className={styles.title}>Orientación de Trámites</h1>
+          <p className={styles.subtitle}>Ingrese su RUT para registrar su consulta</p>
+
+          <input
+            type="text"
+            className={styles.realInput}
+            value={rut ? formatRutUI(rut) : ''}
+            placeholder="12345678-9"
+            onChange={(e) => {
+              const val = e.target.value.replace(/[^0-9kK]/gi, '');
+              if (val.length <= 10) setRut(val);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && rut.length >= 8 && !loading) handleSubmit();
+            }}
+            autoFocus
+          />
+
+          {errorMsg && <p style={{ color: 'var(--destructive)', fontWeight: 'bold' }}>{errorMsg}</p>}
+
+          <div className={styles.keypad}>
+            {['1','2','3','4','5','6','7','8','9','C','0','k','DEL'].map((key) => (
+              <button
+                key={key}
+                className={`${styles.keyBtn} ${key === 'DEL' ? styles.delBtn : ''} ${key === 'C' ? styles.clearBtn : ''}`}
+                onClick={() => handleKeypad(key)}
+              >
+                {key === 'DEL' ? 'Borrar' : key === 'C' ? 'Limpiar' : key}
+              </button>
+            ))}
+          </div>
+
+          <button className={styles.primaryBtn} onClick={handleSubmit} disabled={rut.length < 8 || loading}>
+            {loading ? 'Generando...' : 'Registrar Consulta'}
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  if (screen === 'appointment') {
+    return (
+      <main className={styles.container}>
+        <div className={styles.glassPanel}>
+          <button className={styles.backBtn} onClick={resetFlow}>← Volver</button>
+          <h1 className={styles.title}>Hora Agendada</h1>
+          <p className={styles.subtitle}>Seleccione el funcionario con quien tiene la cita</p>
+
+          <div className={styles.deptoGrid}>
+            {funcionarios.map(f => (
+              <button key={f.id} className={styles.deptoBtn} onClick={() => handleFuncionarioSelect(f)}>
+                <strong>{f.nombre}</strong>
+                <small style={{ display: 'block', fontSize: '0.8rem', opacity: 0.7 }}>{f.departamento}</small>
+              </button>
+            ))}
+            {funcionarios.length === 0 && (
+              <p style={{ color: 'var(--text-secondary)', gridColumn: '1/-1', textAlign: 'center' }}>
+                No hay funcionarios disponibles para agendar.
+              </p>
+            )}
           </div>
         </div>
       </main>
@@ -202,13 +386,13 @@ export default function TotemPage() {
   return (
     <main className={styles.container}>
       <div className={styles.glassPanel}>
-        <button className={styles.backBtn} onClick={() => { setSelectedDepto(null); setRut(''); setErrorMsg(''); }}>
-          ← Volver
-        </button>
-        <h1 className={styles.title}>{selectedDepto}</h1>
+        <button className={styles.backBtn} onClick={() => setScreen('menu')}>← Volver</button>
+        <h1 className={styles.title}>
+          {selectedMode === 'general' ? selectedCategory : selectedMode === 'appointment' ? `Cita con ${selectedFuncionario?.nombre || 'Funcionario'}` : oirsDepartamento}
+        </h1>
         <p className={styles.subtitle}>Ingrese su RUT para obtener un número de atención</p>
-        
-        <input 
+
+        <input
           type="text"
           className={styles.realInput}
           value={rut ? formatRutUI(rut) : ''}
@@ -218,19 +402,17 @@ export default function TotemPage() {
             if (val.length <= 10) setRut(val);
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && rut.length >= 8 && !loading) {
-              handleSubmit();
-            }
+            if (e.key === 'Enter' && rut.length >= 8 && !loading) handleSubmit();
           }}
           autoFocus
         />
-        
+
         {errorMsg && <p style={{ color: 'var(--destructive)', fontWeight: 'bold' }}>{errorMsg}</p>}
 
         <div className={styles.keypad}>
           {['1','2','3','4','5','6','7','8','9','C','0','k','DEL'].map((key) => (
-            <button 
-              key={key} 
+            <button
+              key={key}
               className={`${styles.keyBtn} ${key === 'DEL' ? styles.delBtn : ''} ${key === 'C' ? styles.clearBtn : ''}`}
               onClick={() => handleKeypad(key)}
             >
@@ -239,14 +421,18 @@ export default function TotemPage() {
           ))}
         </div>
 
-        <button 
-          className={styles.primaryBtn} 
-          onClick={handleSubmit} 
-          disabled={rut.length < 8 || loading}
-        >
+        <button className={styles.primaryBtn} onClick={handleSubmit} disabled={rut.length < 8 || loading}>
           {loading ? 'Generando...' : 'Obtener Turno'}
         </button>
       </div>
     </main>
+  );
+}
+
+export default function TotemPage() {
+  return (
+    <Suspense fallback={<div className={styles.container}><div className={styles.glassPanel}><p>Cargando...</p></div></div>}>
+      <TotemInner />
+    </Suspense>
   );
 }

@@ -1,133 +1,418 @@
 .container {
   min-height: 100vh;
+  background-color: var(--bg-color);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: var(--spacing-8);
-  background-color: var(--bg-color);
 }
 
-.hero {
+.loadingScreen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loadingDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.5); }
+}
+
+/* ===== USER BAR (logged in) ===== */
+
+.userBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 2rem;
+  background: var(--surface-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.userBarLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.instName {
+  color: var(--text-primary);
+}
+
+.roleBadge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 20px;
+  text-transform: uppercase;
+}
+
+.roleBadge[data-role="admin"] { background: rgba(37, 99, 235, 0.1); color: var(--primary); }
+.roleBadge[data-role="funcionario"] { background: rgba(16, 185, 129, 0.1); color: var(--success); }
+
+.userBarRight {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.userEmail {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.logoutBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-md);
+  transition: all 0.2s;
+}
+
+.logoutBtn:hover {
+  background: var(--surface-hover);
+  color: var(--destructive);
+}
+
+/* ===== HERO SMALL (logged in) ===== */
+
+.heroSmall {
   text-align: center;
-  margin-bottom: var(--spacing-12);
-  animation: fadeInDown 0.6s ease-out;
+  padding: 2.5rem 1rem 1.5rem;
 }
 
 .badge {
   display: inline-block;
-  padding: 4px 12px;
-  background: rgba(37, 99, 235, 0.1);
+  padding: 3px 10px;
+  background: rgba(37, 99, 235, 0.08);
   color: var(--primary);
   border-radius: 20px;
   font-weight: 600;
-  font-size: 0.875rem;
-  margin-bottom: var(--spacing-4);
+  font-size: 0.75rem;
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.5px;
 }
 
-.title {
-  font-size: 3.5rem;
+.titleSmall {
+  font-size: 1.75rem;
   font-weight: 800;
   color: var(--text-primary);
-  margin-bottom: var(--spacing-4);
-  letter-spacing: -0.02em;
+  margin-bottom: 0.35rem;
 }
 
 .subtitle {
-  font-size: 1.25rem;
+  font-size: 1rem;
   color: var(--text-secondary);
-  max-width: 600px;
-  margin: 0 auto;
 }
 
-.grid {
+/* ===== PORTAL GRID (logged in) ===== */
+
+.portalGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: var(--spacing-6);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  max-width: 900px;
+  margin: 1rem auto;
+  padding: 0 1.5rem;
   width: 100%;
-  max-width: 1000px;
-  animation: fadeInUp 0.8s ease-out;
 }
 
-.card {
+.portalCard {
   background: var(--surface-color);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-xl);
-  padding: var(--spacing-8);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
   text-decoration: none;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-3);
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+  transition: all 0.25s ease;
   position: relative;
   overflow: hidden;
 }
 
-.card::before {
+.portalCard::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 4px;
+  top: 0; left: 0; right: 0;
+  height: 3px;
   background: var(--primary);
   transform: scaleX(0);
   transform-origin: left;
   transition: transform 0.3s ease;
 }
 
-.card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 20px 40px -10px rgba(0,0,0,0.1);
+.portalCard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px -8px rgba(0,0,0,0.08);
   border-color: var(--primary);
 }
 
-.card:hover::before {
+.portalCard:hover::before {
   transform: scaleX(1);
 }
 
-.iconWrapper {
-  width: 56px;
-  height: 56px;
+.portalIcon {
+  width: 48px;
+  height: 48px;
   border-radius: var(--radius-lg);
   background: var(--surface-hover);
   color: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: var(--spacing-2);
 }
 
-.card:hover .iconWrapper {
+.portalCard:hover .portalIcon {
   background: var(--primary);
   color: white;
 }
 
-.card h2 {
-  font-size: 1.25rem;
+.portalLabel {
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin: 0;
 }
 
-.card p {
-  font-size: 0.95rem;
+.portalDesc {
+  font-size: 0.8rem;
   color: var(--text-secondary);
-  margin: 0;
+}
+
+/* ===== LANDING SPLIT (logged out) ===== */
+
+.landingSplit {
+  display: flex;
+  min-height: 100vh;
+}
+
+.landingHero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 4rem;
+  background: linear-gradient(160deg, var(--surface-color), var(--bg-color));
+}
+
+.landingTitle {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.2;
+  margin-bottom: 1rem;
+  letter-spacing: -0.03em;
+}
+
+.landingDesc {
+  font-size: 1.05rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-width: 480px;
+  margin-bottom: 2rem;
+}
+
+.featureList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.featureItem {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface-hover);
+  border: 1px solid var(--border-color);
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+}
+
+.landingActions {
+  width: 420px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 4rem 3rem;
+  gap: 1rem;
+}
+
+.actionCard {
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.actionCard h2 {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.actionCard p {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
-@keyframes fadeInDown {
-  from { opacity: 0; transform: translateY(-20px); }
-  to { opacity: 1; transform: translateY(0); }
+.primaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--primary);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
 }
 
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+.primaryBtn:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
 }
 
-@media (max-width: 768px) {
-  .title { font-size: 2.5rem; }
-  .grid { grid-template-columns: 1fr; }
+.primaryBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.secondaryBtn {
+  width: 100%;
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  font-weight: 700;
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.secondaryBtn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.dividerRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 0.5rem;
+}
+
+.dividerLine {
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
+}
+
+.dividerText {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.loginForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.loginForm input {
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.loginForm input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.loginError {
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--destructive);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md);
+  font-size: 0.8rem;
+  border: 1px solid rgba(239, 68, 68, 0.15);
+}
+
+.textBtn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.35rem;
+  text-align: center;
+}
+
+.textBtn:hover {
+  color: var(--text-primary);
+}
+
+/* ===== RESPONSIVE ===== */
+
+@media (max-width: 860px) {
+  .landingSplit {
+    flex-direction: column;
+  }
+  .landingActions {
+    width: 100%;
+    padding: 2rem 1.5rem;
+  }
+  .landingHero {
+    padding: 3rem 1.5rem 1rem;
+  }
+  .landingTitle {
+    font-size: 1.8rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .portalGrid {
+    grid-template-columns: 1fr;
+    padding: 0 1rem;
+  }
+  .userBar {
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+  }
 }

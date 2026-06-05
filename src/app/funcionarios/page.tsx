@@ -6,10 +6,13 @@ import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndP
 import { collection, query, where, getDocs, updateDoc, doc, setDoc, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { triggerWebhook } from '@/lib/notify';
 import styles from './funcionarios.module.css';
-import { LogOut, User, CheckCircle, SkipForward, Megaphone, Download } from 'lucide-react';
+import { LogOut, User, CheckCircle, SkipForward, Megaphone, Download, Bell, BellRing } from 'lucide-react';
 
 interface Funcionario {
   id: string;
+  user_id: string;
+  institution_id: string;
+  role: string;
   nombre: string;
   departamento: string;
   cargo?: string;
@@ -26,6 +29,15 @@ interface Turno {
   letra_ticket?: string;
   rut_usuario: string;
   estado: string;
+  departamento_solicitado?: string;
+  priority_level?: number;
+  is_appointment?: boolean;
+}
+
+interface Notification {
+  id: string;
+  message: string;
+  turno: string;
 }
 
 export default function StaffPage() {
@@ -48,6 +60,7 @@ export default function StaffPage() {
   const [currentTurno, setCurrentTurno] = useState<Turno | null>(null);
   const [queueDocs, setQueueDocs] = useState<any[]>([]);
   const [userHistory, setUserHistory] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   // WhatsApp states
   const [whatsappPhone, setWhatsappPhone] = useState('');
@@ -56,10 +69,10 @@ export default function StaffPage() {
   const [testSent, setTestSent] = useState(false);
   const [testError, setTestError] = useState('');
 
-  // Refs for tracking changes and bypassing closures in firestore listener
   const funcionarioRef = useRef<Funcionario | null>(null);
   const isFirstEspera = useRef(true);
   const isFirstLoad = useRef(true);
+  const socketRef = useRef<any>(null);
 
   useEffect(() => {
     funcionarioRef.current = funcionario;
@@ -75,7 +88,6 @@ export default function StaffPage() {
       }
     });
 
-    // Cargar departamentos
     const fetchConfig = async () => {
       const c = await getDocs(query(collection(db, 'configuracion')));
       const globalDoc = c.docs.find(d => d.id === 'global');
@@ -88,28 +100,61 @@ export default function StaffPage() {
     return () => unsubscribe();
   }, []);
 
+  const connectSocket = (institutionId: string, funcionarioUserId: string) => {
+    const initSocket = async () => {
+      try {
+        const { io } = await import('socket.io-client');
+        const socket = io(window.location.origin);
+        socketRef.current = socket;
+
+        socket.emit('join-institution', institutionId);
+        socket.emit('join-funcionario', funcionarioUserId);
+
+        socket.on('new-appointment', (ticket: any) => {
+          setNotifications(prev => [{
+            id: `${Date.now()}`,
+            message: `Nuevo paciente con cita: ${ticket.letra_ticket || ''}-${ticket.numero} para ${ticket.departamento || 'su módulo'}`,
+            turno: `${ticket.letra_ticket || ''}-${ticket.numero}`,
+          }, ...prev].slice(0, 5));
+
+          setTimeout(() => {
+            setNotifications(prev => prev.slice(1));
+          }, 8000);
+        });
+      } catch (e) {
+        console.log('Socket.io no disponible, usando Firestore en tiempo real');
+      }
+    };
+    initSocket();
+  };
+
   const fetchFuncionarioData = async (userId: string) => {
     try {
-      // Use onSnapshot to avoid race conditions when creating new accounts
       const q = query(collection(db, 'especialistas'), where('user_id', '==', userId));
       onSnapshot(q, async (querySnapshot) => {
         if (!querySnapshot.empty) {
           const specDoc = querySnapshot.docs[0];
           const specData = { id: specDoc.id, ...specDoc.data() } as Funcionario;
-          
+
+          if (specData.role && specData.role !== 'funcionario') {
+            setAuthError('Acceso denegado: Solo funcionarios pueden acceder a este panel.');
+            setLoading(false);
+            return;
+          }
+
           setFuncionario(specData);
           setWhatsappPhone(specData.whatsapp_phone || '');
           setWhatsappApiKey(specData.whatsapp_apikey || '');
-          
+
           if (isFirstLoad.current) {
-            // First load for this session
             isFirstLoad.current = false;
             await updateDoc(doc(db, 'especialistas', specData.id), { estado_funcionario: 'activo' });
             refreshQueue(specData.id);
+            if (specData.institution_id && specData.user_id) {
+              connectSocket(specData.institution_id, specData.user_id);
+            }
           }
           setLoading(false);
-        } else {
-          // Keep loading if we expect it to be created shortly, or timeout
         }
       });
     } catch (e) {
@@ -122,51 +167,57 @@ export default function StaffPage() {
     const qEspera = query(collection(db, 'turnos'), where('estado', '==', 'espera'));
     onSnapshot(qEspera, (snap) => {
       const currentFunc = funcionarioRef.current;
+      const allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
 
-      if (isFirstEspera.current) {
-        isFirstEspera.current = false;
-      } else {
+      const filtered = currentFunc
+        ? allDocs.filter(d => d.departamento_solicitado === currentFunc.departamento)
+        : allDocs;
+
+      filtered.sort((a, b) => {
+        const priorityA = a.priority_level || 0;
+        const priorityB = b.priority_level || 0;
+        if (priorityB !== priorityA) return priorityB - priorityA;
+        const timeA = new Date(a.created_at || 0).getTime();
+        const timeB = new Date(b.created_at || 0).getTime();
+        return timeA - timeB;
+      });
+
+      if (!isFirstEspera.current) {
         snap.docChanges().forEach((change) => {
           if (change.type === 'added') {
             const newTurno = change.doc.data();
-
             if (currentFunc && currentFunc.departamento === newTurno.departamento_solicitado) {
-              const allDocs = snap.docs.map(d => d.data());
-              const currentQueueCount = allDocs.filter(d => d.departamento_solicitado === currentFunc.departamento).length;
+              const queueCount = filtered.length;
 
               if (currentFunc.whatsapp_phone && currentFunc.whatsapp_apikey) {
                 const ticketStr = `${newTurno.letra_ticket || 'T'}-${newTurno.numero}`;
                 const deptoStr = newTurno.departamento_solicitado || currentFunc.departamento;
+                const priorityTag = newTurno.is_appointment ? '🔔 *ALTA PRIORIDAD* ' : '';
+                const msg = `${priorityTag}🔔 *FilApp - Nuevo Turno*\nSe ha solicitado un nuevo turno en tu módulo de *${deptoStr}*.\n🎫 *Turno:* ${ticketStr}\n👥 *Personas en cola:* ${queueCount}\nIngresa al panel para atender.`;
 
-                const msg = `🔔 *FilApp - Nuevo Turno*\nSe ha solicitado un nuevo turno en tu módulo de *${deptoStr}*.\n🎫 *Turno:* ${ticketStr}\n👥 *Personas en cola:* ${currentQueueCount}\nIngresa al panel para atender.`;
+                const encodedMsg = encodeURIComponent(msg);
+                const encodedPhone = encodeURIComponent(currentFunc.whatsapp_phone.replace(/[^0-9+]/g, ''));
+                const url = `https://api.callmebot.com/whatsapp.php?phone=${encodedPhone}&text=${encodedMsg}&apikey=${currentFunc.whatsapp_apikey.trim()}`;
 
-                fetch('/api/whatsapp', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    phone: currentFunc.whatsapp_phone,
-                    apikey: currentFunc.whatsapp_apikey,
-                    message: msg
-                  })
-                }).catch(err => console.error('Error al enviar WhatsApp:', err));
+                fetch(url, { mode: 'no-cors' }).catch(err => console.error('Error al enviar WhatsApp:', err));
               }
             }
           }
         });
       }
+      isFirstEspera.current = false;
 
-      setQueueDocs(snap.docs.map(d => d.data()));
+      setQueueDocs(filtered);
     });
 
     const qActivo = query(collection(db, 'turnos'), where('especialista_id', '==', specId));
     onSnapshot(qActivo, async (snap) => {
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Turno));
       const activo = docs.find(d => d.estado === 'llamado');
-      
+
       if (activo) {
         setCurrentTurno(activo);
-        
-        // Cargar historial
+
         if (activo.rut_usuario) {
           const histQ = query(
             collection(db, 'turnos'),
@@ -190,23 +241,33 @@ export default function StaffPage() {
     setLoading(true);
     setAuthError('');
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCred = await signInWithEmailAndPassword(auth, email, password);
+      const q = query(collection(db, 'especialistas'), where('user_id', '==', userCred.user.uid));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const data = snap.docs[0].data() as Funcionario;
+        if (data.role && data.role !== 'funcionario') {
+          setAuthError('Acceso denegado: Este panel es solo para funcionarios.');
+          await signOut(auth);
+          setLoading(false);
+        }
+      }
     } catch (error: any) {
       if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
         try {
-          // Intentar registro automático
           const userCred = await createUserWithEmailAndPassword(auth, email, password);
-          // Crear perfil especialista
           await setDoc(doc(db, 'especialistas', userCred.user.uid), {
             user_id: userCred.user.uid,
+            role: 'funcionario',
             nombre: nombre || 'Funcionario Nuevo',
             departamento: departamento,
             cargo: cargo || 'Funcionario',
             estado_funcionario: 'activo',
             avatar_url: '',
-            letra_atencion: letraAtencion || email.split('@')[0].toUpperCase().substring(0,2)
+            letra_atencion: letraAtencion || email.split('@')[0].toUpperCase().substring(0,2),
+            whatsapp_phone: '',
+            whatsapp_apikey: '',
           });
-          // La sesión se actualizará sola por el onAuthStateChanged
         } catch (regError: any) {
           if (regError.code === 'auth/email-already-in-use') {
             setAuthError('La contraseña es incorrecta.');
@@ -227,6 +288,9 @@ export default function StaffPage() {
       try {
         await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'inactivo' });
       } catch (e) {}
+    }
+    if (socketRef.current) {
+      socketRef.current.disconnect();
     }
     await signOut(auth);
   };
@@ -269,34 +333,21 @@ export default function StaffPage() {
 
     const cleanPhone = whatsappPhone.trim();
     const cleanKey = whatsappApiKey.trim();
-    
+
     const testMsg = `📲 *¡FilApp Conectado!*\nHola *${funcionario.nombre}*, tu WhatsApp se ha vinculado correctamente a FilApp.\nRecibirás una notificación en este chat cada vez que ingresen turnos en espera para *${funcionario.departamento}*.\n_Este servicio estará activo mientras mantengas tu panel abierto._`;
 
     try {
-      // 1. Send test message via API to verify it works
-      const res = await fetch('/api/whatsapp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: cleanPhone,
-          apikey: cleanKey,
-          message: testMsg
-        })
-      });
+      const encodedMsg = encodeURIComponent(testMsg);
+      const encodedPhone = encodeURIComponent(cleanPhone.replace(/[^0-9+]/g, ''));
+      const url = `https://api.callmebot.com/whatsapp.php?phone=${encodedPhone}&text=${encodedMsg}&apikey=${cleanKey}`;
 
-      const data = await res.json();
+      await fetch(url, { mode: 'no-cors' });
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Error al conectar con CallMeBot. Verifica la API Key y tu Número de teléfono.');
-      }
-
-      // 2. Save credentials to Firestore
       await updateDoc(doc(db, 'especialistas', funcionario.id), {
         whatsapp_phone: cleanPhone,
         whatsapp_apikey: cleanKey
       });
 
-      // 3. Update local state
       setFuncionario({
         ...funcionario,
         whatsapp_phone: cleanPhone,
@@ -343,21 +394,20 @@ export default function StaffPage() {
   const llamarSiguiente = async () => {
     if (!funcionario) return;
     setLoading(true);
-    
-    // Si ya tiene uno activo, forzar a saltarlo o finalizarlo primero
+
     if (currentTurno) {
       alert("Debes finalizar el turno actual primero.");
       setLoading(false);
       return;
     }
 
-    // Buscar turnos en espera sin el doble filtro de BD
     const qNext = query(collection(db, 'turnos'), where('estado', '==', 'espera'));
     const nextSnap = await getDocs(qNext);
-    
-    // Filtrar en cliente
+
     const docsList = nextSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-    const esperaDocs = docsList.filter(d => d.departamento_solicitado === funcionario.departamento);
+    const esperaDocs = docsList.filter(
+      d => d.departamento_solicitado === funcionario.departamento
+    );
 
     if (esperaDocs.length === 0) {
       alert("No hay pacientes en espera para " + funcionario.departamento);
@@ -365,8 +415,10 @@ export default function StaffPage() {
       return;
     }
 
-    // Ordenar localmente por created_at (del más antiguo al más reciente)
     esperaDocs.sort((a, b) => {
+      const priorityA = a.priority_level || 0;
+      const priorityB = b.priority_level || 0;
+      if (priorityB !== priorityA) return priorityB - priorityA;
       const timeA = new Date(a.created_at || 0).getTime();
       const timeB = new Date(b.created_at || 0).getTime();
       return timeA - timeB;
@@ -375,9 +427,8 @@ export default function StaffPage() {
     const nextTurnoDoc = esperaDocs[0];
 
     try {
-      // Actualizar estado a 'llamado'
-      await updateDoc(doc(db, 'turnos', nextTurnoDoc.id), { 
-          estado: 'llamado', 
+      await updateDoc(doc(db, 'turnos', nextTurnoDoc.id), {
+          estado: 'llamado',
           especialista_id: funcionario.id || '',
           nombre_funcionario: funcionario.nombre || 'Funcionario',
           departamento: funcionario.departamento || '',
@@ -385,11 +436,10 @@ export default function StaffPage() {
           letra_especialista: funcionario.letra_atencion || 'A',
           called_at: new Date().toISOString()
       });
-      
+
       await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'atendiendo' });
       setFuncionario({ ...funcionario, estado_funcionario: 'atendiendo' });
-      
-      // Notificar a n8n
+
       triggerWebhook('llamado', {
           numero: nextTurnoDoc.numero,
           rut_usuario: nextTurnoDoc.rut_usuario,
@@ -398,8 +448,7 @@ export default function StaffPage() {
           departamento: funcionario.departamento || '',
           letra_especialista: funcionario.letra_atencion || 'A'
       });
-        
-      // Auto updated via snapshot
+
     } catch (e) {
       console.error("Error al llamar siguiente:", e);
       alert("Hubo un error al llamar al paciente. Revise consola.");
@@ -411,15 +460,14 @@ export default function StaffPage() {
     if (!currentTurno || !funcionario) return;
     setLoading(true);
     try {
-      await updateDoc(doc(db, 'turnos', currentTurno.id), { 
-          estado: 'atendido', 
+      await updateDoc(doc(db, 'turnos', currentTurno.id), {
+          estado: 'atendido',
           finished_at: new Date().toISOString()
       });
-        
+
       await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'activo' });
       setFuncionario({ ...funcionario, estado_funcionario: 'activo' });
-        
-      // Auto updated via snapshot
+
     } catch (e) {
       console.error(e);
     }
@@ -431,11 +479,10 @@ export default function StaffPage() {
     setLoading(true);
     try {
       await updateDoc(doc(db, 'turnos', currentTurno.id), { estado: 'saltado' });
-        
+
       await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'activo' });
       setFuncionario({ ...funcionario, estado_funcionario: 'activo' });
-        
-      // Auto updated via snapshot
+
     } catch (e) {
       console.error(e);
     }
@@ -481,7 +528,7 @@ export default function StaffPage() {
     setLoading(true);
     try {
       const q = query(
-        collection(db, 'turnos'), 
+        collection(db, 'turnos'),
         where('especialista_id', '==', funcionario.id),
         where('estado', '==', 'atendido'),
         orderBy('finished_at', 'desc')
@@ -493,6 +540,7 @@ export default function StaffPage() {
           ID_Turno: d.id,
           Turno_Visual: `${t.letra_ticket ? t.letra_ticket + '-' : ''}${t.numero}`,
           RUT_Usuario: t.rut_usuario || '',
+          Prioridad: t.is_appointment ? 'Alta (Cita)' : 'Normal',
           Fecha_Atencion: t.finished_at ? new Date(t.finished_at).toLocaleString() : '',
           Llamado_En: t.called_at ? new Date(t.called_at).toLocaleString() : ''
         };
@@ -505,7 +553,7 @@ export default function StaffPage() {
     setLoading(false);
   };
 
-  // --- RENDERS ---
+  const queueCount = queueDocs.filter(d => d.departamento_solicitado === funcionario?.departamento).length;
 
   if (loading && !session && !authError) {
     return <div className={styles.centerLoad}>Cargando entorno...</div>;
@@ -517,9 +565,9 @@ export default function StaffPage() {
         <form onSubmit={handleLogin} className={styles.authCard}>
           <h2>Acceso Funcionarios</h2>
           <p>Inicie sesión con su correo para atender usuarios.</p>
-          
+
           {authError && <div className={styles.errorBanner}>{authError}</div>}
-          
+
           <div className={styles.inputGroup}>
             <label>Correo Electrónico</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
@@ -548,7 +596,7 @@ export default function StaffPage() {
             <label>Módulo / Letra (Solo cuenta nueva)</label>
             <input type="text" placeholder="Ej: A, B, Box 1" value={letraAtencion} onChange={e => setLetraAtencion(e.target.value)} />
           </div>
-          
+
           <button type="submit" className={styles.primaryBtn} disabled={loading}>
             {loading ? 'Ingresando...' : 'Iniciar Sesión'}
           </button>
@@ -557,18 +605,16 @@ export default function StaffPage() {
     );
   }
 
-  const queueCount = queueDocs.filter(d => d.departamento_solicitado === funcionario?.departamento).length;
-
   return (
     <div className={styles.dashboardContainer}>
       <header className={styles.topBar}>
         <div className={styles.userInfo}>
           {isEditingAvatar ? (
             <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
-              <input 
+              <input
                 className={styles.editInput}
-                value={newAvatarUrl} 
-                onChange={e => setNewAvatarUrl(e.target.value)} 
+                value={newAvatarUrl}
+                onChange={e => setNewAvatarUrl(e.target.value)}
                 placeholder="URL de tu foto..."
                 autoFocus
               />
@@ -577,8 +623,8 @@ export default function StaffPage() {
             </div>
           ) : (
             <div className={styles.profileCell}>
-              <div 
-                className={styles.avatarWrapper} 
+              <div
+                className={styles.avatarWrapper}
                 onClick={() => { setNewAvatarUrl(funcionario?.avatar_url || ''); setIsEditingAvatar(true); }}
                 title="Cambiar Foto"
               >
@@ -590,22 +636,22 @@ export default function StaffPage() {
                   </div>
                 )}
               </div>
-              <span 
-                className={styles.statusDot} 
+              <span
+                className={styles.statusDot}
                 data-status={funcionario?.estado_funcionario || 'inactivo'}
                 title={`Estado: ${funcionario?.estado_funcionario || 'inactivo'}`}
               />
             </div>
           )}
-          
+
           <div>
             <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
               {isEditingLetra ? (
                 <>
-                  <input 
+                  <input
                     className={styles.editInput}
-                    value={newLetra} 
-                    onChange={e => setNewLetra(e.target.value)} 
+                    value={newLetra}
+                    onChange={e => setNewLetra(e.target.value)}
                     placeholder="Nuevo módulo"
                     autoFocus
                   />
@@ -615,8 +661,8 @@ export default function StaffPage() {
               ) : (
                 <>
                   <strong>{funcionario?.nombre} - Módulo {funcionario?.letra_atencion}</strong>
-                  <button 
-                    className={styles.editBtn} 
+                  <button
+                    className={styles.editBtn}
                     onClick={() => { setNewLetra(funcionario?.letra_atencion || ''); setIsEditingLetra(true); }}
                   >
                     Editar
@@ -628,6 +674,12 @@ export default function StaffPage() {
           </div>
         </div>
         <div className={styles.headerActions}>
+          {notifications.length > 0 && (
+            <div className={styles.notificationArea}>
+              <BellRing size={18} className={styles.notificationBell} />
+              <span className={styles.notificationCount}>{notifications.length}</span>
+            </div>
+          )}
           <button onClick={handleExportMyHistory} className={styles.exportBtn} title="Descargar mi historial">
             <Download size={18} /> Exportar
           </button>
@@ -637,13 +689,24 @@ export default function StaffPage() {
         </div>
       </header>
 
+      {notifications.length > 0 && (
+        <div className={styles.notificationBar}>
+          {notifications.map(n => (
+            <div key={n.id} className={styles.notificationItem}>
+              <BellRing size={16} />
+              <span>{n.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className={styles.mainLayout}>
         <div className={styles.panelLeft}>
           <div className={styles.statCard}>
             <h3>Pacientes en Espera</h3>
             <div className={styles.bigNumber}>{queueCount}</div>
-            <button 
-              className={`${styles.actionBtn} ${styles.btnCall}`} 
+            <button
+              className={`${styles.actionBtn} ${styles.btnCall}`}
               onClick={llamarSiguiente}
               disabled={loading || currentTurno !== null || queueCount === 0}
             >
@@ -651,10 +714,9 @@ export default function StaffPage() {
             </button>
           </div>
 
-          {/* Tarjeta de Configuración de WhatsApp */}
           <div className={styles.whatsappCard}>
-            <h3>📲 Alertas de WhatsApp</h3>
-            
+            <h3>Alertas de WhatsApp</h3>
+
             {funcionario?.whatsapp_phone && funcionario?.whatsapp_apikey ? (
               <div className={styles.waConnectedState}>
                 <div className={styles.waBadge}>
@@ -666,8 +728,8 @@ export default function StaffPage() {
                 <p className={styles.waInstructionText}>
                   Recibirás alertas en tiempo real en tu WhatsApp cuando lleguen turnos de <strong>{funcionario.departamento}</strong>.
                 </p>
-                <button 
-                  onClick={handleUnlinkWhatsapp} 
+                <button
+                  onClick={handleUnlinkWhatsapp}
                   className={styles.waDisconnectBtn}
                   disabled={isSavingWhatsapp}
                 >
@@ -679,7 +741,7 @@ export default function StaffPage() {
                 <p className={styles.waDescription}>
                   Recibe notificaciones automáticas e instantáneas en tu celular cuando haya turnos en espera para tu módulo mediante CallMeBot.
                 </p>
-                
+
                 <div className={styles.waSteps}>
                   <h4>Configuración en 15 segundos:</h4>
                   <ol>
@@ -700,30 +762,30 @@ export default function StaffPage() {
 
                 <div className={styles.waInputGroup}>
                   <label>Número de WhatsApp (con código ej: 56912345678)</label>
-                  <input 
-                    type="text" 
-                    placeholder="Ej: 56912345678" 
+                  <input
+                    type="text"
+                    placeholder="Ej: +56912345678"
                     value={whatsappPhone}
-                    onChange={e => setWhatsappPhone(e.target.value.replace(/[^0-9]/g, ''))}
-                    required 
+                    onChange={e => setWhatsappPhone(e.target.value.replace(/[^0-9+]/g, ''))}
+                    required
                     disabled={isSavingWhatsapp}
                   />
                 </div>
 
                 <div className={styles.waInputGroup}>
                   <label>Tu CallMeBot API Key</label>
-                  <input 
-                    type="text" 
-                    placeholder="Ej: 123456" 
+                  <input
+                    type="text"
+                    placeholder="Ej: 123456"
                     value={whatsappApiKey}
                     onChange={e => setWhatsappApiKey(e.target.value)}
-                    required 
+                    required
                     disabled={isSavingWhatsapp}
                   />
                 </div>
 
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className={styles.waConnectBtn}
                   disabled={isSavingWhatsapp || !whatsappPhone.trim() || !whatsappApiKey.trim()}
                 >
@@ -743,6 +805,9 @@ export default function StaffPage() {
               </div>
               <div className={styles.patientInfo}>
                 <p><strong>RUT:</strong> {currentTurno.rut_usuario}</p>
+                {currentTurno.is_appointment && (
+                  <p className={styles.appointmentTag}>Hora Agendada - Prioridad Alta</p>
+                )}
               </div>
 
               {userHistory.length > 0 && (
@@ -751,8 +816,8 @@ export default function StaffPage() {
                   <ul>
                     {userHistory.map(h => (
                       <li key={h.id}>
-                        <strong>{new Date(h.finished_at).toLocaleDateString()}</strong> - 
-                        Atendido por: {h.nombre_funcionario || 'Funcionario'} ({h.departamento || 'Sin Depto'}) 
+                        <strong>{new Date(h.finished_at).toLocaleDateString()}</strong> -
+                        Atendido por: {h.nombre_funcionario || 'Funcionario'} ({h.departamento || 'Sin Depto'})
                       </li>
                     ))}
                   </ul>
@@ -760,14 +825,14 @@ export default function StaffPage() {
               )}
 
               <div className={styles.actionGrid}>
-                <button 
+                <button
                   className={`${styles.actionBtn} ${styles.btnFinish}`}
                   onClick={finalizarTurno}
                   disabled={loading}
                 >
                   <CheckCircle size={20} /> Finalizar Atención
                 </button>
-                <button 
+                <button
                   className={`${styles.actionBtn} ${styles.btnSkip}`}
                   onClick={saltarTurno}
                   disabled={loading}

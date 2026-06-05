@@ -3,13 +3,15 @@
 import { useEffect, useState } from 'react';
 import { db, auth } from '@/lib/firebase/client';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { collection, doc, runTransaction, setDoc, getDoc, addDoc } from 'firebase/firestore';
+import { collection, doc, runTransaction, setDoc, getDoc, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { triggerWebhook } from '@/lib/notify';
 import styles from './central.module.css';
 import { LogOut, UserPlus, Info, CheckCircle, Search } from 'lucide-react';
 
 export default function CentralPage() {
   const [session, setSession] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [institutionId, setInstitutionId] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(true);
@@ -20,11 +22,19 @@ export default function CentralPage() {
   const [actionMessage, setActionMessage] = useState({ text: '', type: '' });
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setSession(user);
+      if (user) {
+        const q = query(collection(db, 'especialistas'), where('user_id', '==', user.uid));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const data = snap.docs[0].data() as any;
+          setUserProfile(data);
+          setInstitutionId(data.institution_id || null);
+        }
+      }
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -74,14 +84,14 @@ export default function CentralPage() {
     const userRef = doc(db, 'usuarios', rutUser);
     const userSnap = await getDoc(userRef);
     if (!userSnap.exists()) {
-      await setDoc(userRef, { rut: rutUser, nombre: nombreUser, created_at: new Date().toISOString() });
+      await setDoc(userRef, { rut: rutUser, nombre: nombreUser, institution_id: institutionId, created_at: new Date().toISOString() });
     } else if (nombreUser) {
       await setDoc(userRef, { nombre: nombreUser }, { merge: true });
     }
   };
 
   const handleGenerarTurno = async () => {
-    if (!rut) {
+    if (!rut || !institutionId) {
       showMessage('Debe ingresar un RUT', 'error');
       return;
     }
@@ -90,27 +100,27 @@ export default function CentralPage() {
       const formattedRut = formatRutUI(rut);
       await upsertUser(formattedRut, nombre);
 
-      const configRef = doc(db, 'configuracion', 'global');
+      const instRef = doc(db, 'institutions', institutionId);
       const turnoRef = doc(collection(db, 'turnos'));
-      
+
       let newNumero = 1;
       await runTransaction(db, async (transaction) => {
-        const configDoc = await transaction.get(configRef);
-        
+        const instDoc = await transaction.get(instRef);
+
         const now = new Date();
         const resetTime = new Date();
         resetTime.setHours(7, 30, 0, 0);
-        
+
         let currentNumero = 0;
         let lastReset = null;
 
-        if (!configDoc.exists()) {
-          transaction.set(configRef, { currentTurno: 0, mensaje_dia: 'Bienvenidos' });
+        if (!instDoc.exists()) {
+          transaction.set(instRef, { currentTurno: 0, ultimo_reinicio: null }, { merge: true });
         } else {
-          currentNumero = configDoc.data().currentTurno || 0;
-          lastReset = configDoc.data().ultimo_reinicio || null;
+          currentNumero = instDoc.data()?.currentTurno || 0;
+          lastReset = instDoc.data()?.ultimo_reinicio || null;
         }
-        
+
         if (now >= resetTime) {
           if (!lastReset || new Date(lastReset) < resetTime) {
             currentNumero = 0;
@@ -124,20 +134,20 @@ export default function CentralPage() {
             lastReset = now.toISOString();
           }
         }
-        
+
         newNumero = currentNumero + 1;
-        transaction.update(configRef, { currentTurno: newNumero, ultimo_reinicio: lastReset });
-        
+        transaction.update(instRef, { currentTurno: newNumero, ultimo_reinicio: lastReset });
+
         transaction.set(turnoRef, {
+          institution_id: institutionId,
           numero: newNumero,
           rut_usuario: formattedRut,
           estado: 'espera',
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
         });
       });
 
-      // Notificar a n8n
-      triggerWebhook('ingreso', { numero: newNumero, rut_usuario: formattedRut, nombre });
+      triggerWebhook('ingreso', { numero: newNumero, rut_usuario: formattedRut, nombre, institution_id: institutionId });
 
       showMessage(`¡Turno ${newNumero} generado exitosamente para ${formattedRut}!`, 'success');
       setRut('');
@@ -151,7 +161,7 @@ export default function CentralPage() {
   };
 
   const handleOrientacion = async () => {
-    if (!rut) {
+    if (!rut || !institutionId) {
       showMessage('Debe ingresar un RUT para registro de orientación', 'error');
       return;
     }
@@ -160,12 +170,12 @@ export default function CentralPage() {
       const formattedRut = formatRutUI(rut);
       await upsertUser(formattedRut, nombre);
 
-      // Registrar como atendido instantáneamente
       const now = new Date().toISOString();
       await addDoc(collection(db, 'turnos'), {
+          institution_id: institutionId,
           rut_usuario: formattedRut,
           estado: 'atendido',
-          numero: 0, // Orientación no ocupa número real
+          numero: 0,
           called_at: now,
           finished_at: now,
           created_at: now
@@ -192,9 +202,9 @@ export default function CentralPage() {
         <form onSubmit={handleLogin} className={styles.authCard}>
           <h2>Acceso Central / Recepción</h2>
           <p>Ingrese con credenciales de Central para gestionar turnos manualmente.</p>
-          
+
           {authError && <div className={styles.errorBanner}>{authError}</div>}
-          
+
           <div className={styles.inputGroup}>
             <label>Correo Electrónico</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
@@ -203,7 +213,7 @@ export default function CentralPage() {
             <label>Contraseña</label>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
           </div>
-          
+
           <button type="submit" className={styles.primaryBtn} disabled={loading}>
             {loading ? 'Ingresando...' : 'Iniciar Sesión'}
           </button>
@@ -231,7 +241,7 @@ export default function CentralPage() {
         <div className={styles.actionCard}>
           <h2>Gestión Manual de Usuarios</h2>
           <p className={styles.subtitle}>Ingrese los datos del usuario si el Tótem no está disponible o requiere orientación directa.</p>
-          
+
           {actionMessage.text && (
             <div className={actionMessage.type === 'success' ? styles.successAlert : styles.errorAlert}>
               {actionMessage.text}
@@ -241,28 +251,28 @@ export default function CentralPage() {
           <div className={styles.formGrid}>
             <div className={styles.inputGroup}>
               <label>RUT del Paciente / Usuario</label>
-              <input 
-                type="text" 
-                placeholder="Ej: 12345678-9" 
-                value={rut} 
+              <input
+                type="text"
+                placeholder="Ej: 12345678-9"
+                value={rut}
                 onChange={e => setRut(e.target.value)}
                 autoFocus
               />
             </div>
             <div className={styles.inputGroup}>
               <label>Nombre Completo (Opcional)</label>
-              <input 
-                type="text" 
-                placeholder="Nombre para registro" 
-                value={nombre} 
+              <input
+                type="text"
+                placeholder="Nombre para registro"
+                value={nombre}
                 onChange={e => setNombre(e.target.value)}
               />
             </div>
           </div>
 
           <div className={styles.buttonGrid}>
-            <button 
-              className={`${styles.actionBtn} ${styles.btnPrimary}`} 
+            <button
+              className={`${styles.actionBtn} ${styles.btnPrimary}`}
               onClick={handleGenerarTurno}
               disabled={loading}
             >
@@ -272,9 +282,9 @@ export default function CentralPage() {
                 <span>Enviar a sala de espera pública</span>
               </div>
             </button>
-            
-            <button 
-              className={`${styles.actionBtn} ${styles.btnSecondary}`} 
+
+            <button
+              className={`${styles.actionBtn} ${styles.btnSecondary}`}
               onClick={handleOrientacion}
               disabled={loading}
             >

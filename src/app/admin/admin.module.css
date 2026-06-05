@@ -325,3 +325,149 @@
 .statusDot[data-status="activo"] { background: var(--success); box-shadow: 0 0 8px var(--success); }
 .statusDot[data-status="atendiendo"] { background: var(--primary); box-shadow: 0 0 8px var(--primary); }
 .statusDot[data-status="inactivo"] { background: var(--destructive); }
+
+.authContainer {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-color);
+  padding: var(--spacing-4);
+}
+
+.authCard {
+  background: var(--surface-color);
+  padding: var(--spacing-8);
+  border-radius: var(--radius-xl);
+  width: 100%;
+  max-width: 450px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.authCard h2 {
+  font-size: 2rem;
+  color: var(--primary);
+  margin-bottom: 0;
+}
+
+.authCard p {
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-4);
+}
+
+.errorBanner {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--destructive);
+  padding: var(--spacing-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--destructive);
+  font-size: 0.875rem;
+}
+
+.successBanner {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--success);
+  padding: var(--spacing-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--success);
+  font-size: 0.875rem;
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.inputGroup label {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.inputGroup input {
+  padding: var(--spacing-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.inputGroup input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.logoutBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  color: var(--text-secondary);
+  font-weight: 600;
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-md);
+  transition: all 0.2s;
+  margin-left: auto;
+}
+
+.logoutBtn:hover {
+  background: var(--surface-hover);
+  color: var(--destructive);
+}
+
+.roleChip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.roleChip[data-role="admin"] {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--primary);
+}
+
+.roleChip[data-role="funcionario"] {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+}
+
+.roleToggle {
+  display: flex;
+  background: var(--surface-hover);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: var(--spacing-4);
+}
+
+.roleToggleBtn {
+  flex: 1;
+  padding: 0.6rem 1rem;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.roleToggleBtn:hover {
+  color: var(--text-primary);
+}
+
+.roleToggleActive {
+  background: var(--primary);
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+}

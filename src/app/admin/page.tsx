@@ -7,6 +7,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebas
 import { collection, query, where, getDocs, doc, setDoc, onSnapshot, updateDoc, orderBy, addDoc, getDoc } from 'firebase/firestore';
 import styles from './admin.module.css';
 import { Settings, BarChart3, Users, Clock, AlertTriangle, Download, LogOut, Building2, UserPlus } from 'lucide-react';
+import UserDirectory from '@/components/UserDirectory';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -15,6 +16,8 @@ export default function AdminPage() {
   const [institutionId, setInstitutionId] = useState<string | null>(null);
   const [institutionName, setInstitutionName] = useState('');
 
+  const [tvName, setTvName] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
   const [mensajeDia, setMensajeDia] = useState('');
   const [departamentosStr, setDepartamentosStr] = useState('OIRS, Atención General');
   const [oirsDepartamento, setOirsDepartamento] = useState('OIRS');
@@ -64,6 +67,8 @@ export default function AdminPage() {
             if (instSnap.exists()) {
               const instData = instSnap.data();
               setInstitutionName(instData.name || '');
+              setTvName(instData.config?.tv_name || instData.name || '');
+              setLogoUrl(instData.config?.logo_url || '');
               setMensajeDia(instData.config?.mensaje_dia || '');
               setDepartamentosStr((instData.config?.departamentos || ['OIRS', 'Atención General']).join(', '));
               setOirsDepartamento(instData.config?.oirs_departamento || 'OIRS');
@@ -166,6 +171,8 @@ export default function AdminPage() {
     try {
       await updateDoc(doc(db, 'institutions', institutionId), {
         config: {
+          tv_name: tvName.trim() || institutionName,
+          logo_url: logoUrl.trim(),
           mensaje_dia: mensajeDia,
           departamentos: departamentosStr.split(',').map(s => s.trim()).filter(Boolean),
           oirs_departamento: oirsDepartamento.trim(),
@@ -413,7 +420,25 @@ export default function AdminPage() {
 
         <div className={styles.bottomGrid}>
           <section className={styles.configSection}>
-            <h2>Configuración de la Institución</h2>
+            <h2>Configuración de la Institución (Pantalla TV)</h2>
+            <div className={styles.formGroup}>
+              <label>Nombre de la Institución en TV</label>
+              <input
+                type="text"
+                value={tvName}
+                onChange={e => setTvName(e.target.value)}
+                placeholder="Ej: CESFAM Dr. Barros Luco"
+              />
+            </div>
+            <div className={styles.formGroup}>
+              <label>Logo de la Institución (URL de la imagen)</label>
+              <input
+                type="url"
+                value={logoUrl}
+                onChange={e => setLogoUrl(e.target.value)}
+                placeholder="https://ejemplo.com/logo.png"
+              />
+            </div>
             <div className={styles.formGroup}>
               <label>Mensaje del Día (TV)</label>
               <textarea
@@ -521,6 +546,14 @@ export default function AdminPage() {
             </form>
           </section>
         </div>
+
+        <section className={styles.chartSection} style={{ marginTop: 'var(--spacing-6)' }}>
+          <UserDirectory 
+            institutionId={institutionId || ''} 
+            funcionarioId={userProfile.user_id} 
+            funcionarioName={userProfile.nombre} 
+          />
+        </section>
 
         <section className={styles.chartSection} style={{ marginTop: 'var(--spacing-6)', overflowX: 'auto' }}>
           <h2>Gestión de Funcionarios por Departamento</h2>

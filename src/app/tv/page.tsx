@@ -31,6 +31,8 @@ function TVInner() {
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
   const [showInitOverlay, setShowInitOverlay] = useState(true);
   const [mensajeDia, setMensajeDia] = useState('Bienvenidos a nuestra institución.');
+  const [tvName, setTvName] = useState('FilApp');
+  const [logoUrl, setLogoUrl] = useState('');
   const [clock, setClock] = useState('');
 
   const audioEnabledRef = useRef(isAudioEnabled);
@@ -73,8 +75,11 @@ function TVInner() {
       if (!institutionId) return;
       try {
         const instSnap = await getDoc(doc(db, 'institutions', institutionId));
-        if (instSnap.exists() && instSnap.data().config?.mensaje_dia) {
-          setMensajeDia(instSnap.data().config.mensaje_dia);
+        if (instSnap.exists() && instSnap.data().config) {
+          const cfg = instSnap.data().config;
+          if (cfg.mensaje_dia) setMensajeDia(cfg.mensaje_dia);
+          if (cfg.tv_name) setTvName(cfg.tv_name);
+          if (cfg.logo_url) setLogoUrl(cfg.logo_url);
         }
       } catch (e) {}
     };
@@ -160,7 +165,10 @@ function TVInner() {
   return (
     <main className={styles.container}>
       <header className={styles.header}>
-        <div className={styles.logo}>FilApp</div>
+        <div className={styles.logo} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {logoUrl ? <img src={logoUrl} alt="Logo" style={{height: '40px', objectFit: 'contain', borderRadius: '4px'}} /> : null}
+          {tvName}
+        </div>
         <div className={styles.headerCenter}>
           {clock && <span>{clock}</span>}
         </div>

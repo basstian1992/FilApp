@@ -6,7 +6,9 @@ import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndP
 import { collection, query, where, getDocs, updateDoc, doc, setDoc, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { triggerWebhook } from '@/lib/notify';
 import styles from './funcionarios.module.css';
-import { LogOut, User, CheckCircle, SkipForward, Megaphone, Download, Bell, BellRing } from 'lucide-react';
+import { LogOut, User, CheckCircle, SkipForward, Megaphone, Download, Bell, BellRing, Users } from 'lucide-react';
+import UserForm from '@/components/UserForm';
+import UserDirectory from '@/components/UserDirectory';
 
 interface Funcionario {
   id: string;
@@ -61,6 +63,8 @@ export default function StaffPage() {
   const [queueDocs, setQueueDocs] = useState<any[]>([]);
   const [userHistory, setUserHistory] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [activeTab, setActiveTab] = useState<'atencion' | 'directorio'>('atencion');
+  const [isUserProfileComplete, setIsUserProfileComplete] = useState(false);
 
   // WhatsApp states
   const [whatsappPhone, setWhatsappPhone] = useState('');
@@ -232,6 +236,7 @@ export default function StaffPage() {
       } else {
         setCurrentTurno(null);
         setUserHistory([]);
+        setIsUserProfileComplete(false);
       }
     });
   };
@@ -458,6 +463,12 @@ export default function StaffPage() {
 
   const finalizarTurno = async () => {
     if (!currentTurno || !funcionario) return;
+    if (!isUserProfileComplete) {
+      const confirmMsg = "Los datos obligatorios del paciente no han sido completados o no se ha hecho clic en 'Registrar Usuario'. ¿Estás seguro de que deseas finalizar la atención sin guardarlos?";
+      if (!window.confirm(confirmMsg)) {
+        return;
+      }
+    }
     setLoading(true);
     try {
       await updateDoc(doc(db, 'turnos', currentTurno.id), {
@@ -674,6 +685,19 @@ export default function StaffPage() {
           </div>
         </div>
         <div className={styles.headerActions}>
+          <button 
+            onClick={() => setActiveTab('atencion')} 
+            className={activeTab === 'atencion' ? styles.tabBtnActive : styles.tabBtn}
+          >
+            <Megaphone size={18} /> Atención
+          </button>
+          <button 
+            onClick={() => setActiveTab('directorio')} 
+            className={activeTab === 'directorio' ? styles.tabBtnActive : styles.tabBtn}
+          >
+            <Users size={18} /> Base de Datos
+          </button>
+          
           {notifications.length > 0 && (
             <div className={styles.notificationArea}>
               <BellRing size={18} className={styles.notificationBell} />
@@ -701,8 +725,14 @@ export default function StaffPage() {
       )}
 
       <div className={styles.mainLayout}>
-        <div className={styles.panelLeft}>
-          <div className={styles.statCard}>
+        {activeTab === 'directorio' ? (
+          <div className={styles.directoryWrapper}>
+            <UserDirectory institutionId={funcionario?.institution_id || ''} funcionarioId={funcionario?.id || ''} funcionarioName={funcionario?.nombre || ''} />
+          </div>
+        ) : (
+          <>
+            <div className={styles.panelLeft}>
+              <div className={styles.statCard}>
             <h3>Pacientes en Espera</h3>
             <div className={styles.bigNumber}>{queueCount}</div>
             <button
@@ -840,6 +870,16 @@ export default function StaffPage() {
                   <SkipForward size={20} /> Saltar (No se presenta)
                 </button>
               </div>
+              
+              <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+                <UserForm 
+                  rut={currentTurno.rut_usuario} 
+                  institutionId={funcionario?.institution_id || ''}
+                  funcionarioId={funcionario?.id || ''}
+                  funcionarioName={funcionario?.nombre || ''}
+                  onSaved={(isComplete) => setIsUserProfileComplete(isComplete)} 
+                />
+              </div>
             </div>
           ) : (
             <div className={styles.emptyStateCard}>
@@ -851,6 +891,8 @@ export default function StaffPage() {
             </div>
           )}
         </div>
+          </>
+        )}
       </div>
     </div>
   );

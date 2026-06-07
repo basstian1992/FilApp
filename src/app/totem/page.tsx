@@ -36,7 +36,7 @@ function TotemInner() {
 
   const [rut, setRut] = useState('');
   const [loading, setLoading] = useState(false);
-  const [ticket, setTicket] = useState<{ numero: number; letra_ticket: string; departamento: string; priority: boolean } | null>(null);
+  const [ticket, setTicket] = useState<{ numero: number; letra_ticket: string; departamento: string; priority: boolean; funcionario_nombre?: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
 
   const [categories, setCategories] = useState<string[]>([]);
@@ -151,7 +151,7 @@ function TotemInner() {
       const departamento = selectedMode === 'oirs'
         ? oirsDepartamento
         : selectedMode === 'appointment'
-          ? (selectedFuncionario?.departamento || 'Hora Agendada')
+          ? (selectedFuncionario ? (selectedFuncionario.departamento || 'Hora Agendada') : (selectedCategory || 'Hora Agendada'))
           : selectedCategory;
 
       let letraTicket = departamento.charAt(0).toUpperCase();
@@ -207,7 +207,7 @@ function TotemInner() {
         });
       });
 
-      setTicket({ numero: newNumero, letra_ticket: letraTicket, departamento, priority: isAppointment });
+      setTicket({ numero: newNumero, letra_ticket: letraTicket, departamento, priority: isAppointment, funcionario_nombre: selectedFuncionario?.nombre });
       setScreen('ticket');
 
       triggerWebhook('ingreso', {
@@ -250,7 +250,7 @@ function TotemInner() {
           </div>
           {ticket.priority && (
             <div className={styles.priorityBadge}>
-              Prioridad Alta - Hora Agendada
+              Cita Agendada - {ticket.funcionario_nombre || ticket.departamento}
             </div>
           )}
 
@@ -377,6 +377,13 @@ function TotemInner() {
                 No hay funcionarios disponibles para agendar.
               </p>
             )}
+            <button className={styles.deptoBtn} style={{ background: 'rgba(255, 255, 255, 0.1)', border: '1px dashed rgba(255,255,255,0.4)' }} onClick={() => {
+              setSelectedFuncionario(null);
+              setScreen('categories');
+            }}>
+              <strong>No sé el nombre</strong>
+              <small style={{ display: 'block', fontSize: '0.8rem', opacity: 0.7 }}>Elegir por categoría</small>
+            </button>
           </div>
         </div>
       </main>

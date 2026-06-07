@@ -165,23 +165,14 @@ export default function LandingPage() {
           <div className={styles.actionCard}>
             <h2>Iniciar Sesión</h2>
             <p>Acceda como administrador o funcionario a su institución.</p>
-            {showLogin ? (
-              <form onSubmit={handleLogin} className={styles.loginForm}>
-                {loginError && <div className={styles.loginError}>{loginError}</div>}
-                <input type="email" placeholder="Correo electrónico" value={email} onChange={e => setEmail(e.target.value)} required />
-                <input type="password" placeholder="Contraseña" value={password} onChange={e => setPassword(e.target.value)} required />
-                <button type="submit" className={styles.primaryBtn} disabled={loading} style={{ width: '100%' }}>
-                  {loading ? 'Ingresando...' : 'Ingresar'}
-                </button>
-                <button type="button" className={styles.textBtn} onClick={() => setShowLogin(false)}>
-                  Cancelar
-                </button>
-              </form>
-            ) : (
-              <button className={styles.secondaryBtn} onClick={() => setShowLogin(true)}>
-                Iniciar Sesión
+            <form onSubmit={handleLogin} className={styles.loginForm}>
+              {loginError && <div className={styles.loginError}>{loginError}</div>}
+              <input type="email" placeholder="Correo electrónico" value={email} onChange={e => setEmail(e.target.value)} required />
+              <input type="password" placeholder="Contraseña" value={password} onChange={e => setPassword(e.target.value)} required />
+              <button type="submit" className={styles.primaryBtn} disabled={loading} style={{ width: '100%' }}>
+                {loading ? 'Ingresando...' : 'Ingresar al panel'}
               </button>
-            )}
+            </form>
           </div>
         </div>
       </div>

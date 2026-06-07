@@ -8,7 +8,7 @@ import { doc, setDoc, collection, addDoc } from 'firebase/firestore';
 import styles from './register.module.css';
 import { Plus, X } from 'lucide-react';
 
-const DEFAULT_CATEGORIES = ['Atención General', 'OIRS', 'DIDECO', 'OMIL'];
+const DEFAULT_CATEGORIES: string[] = [];
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -120,7 +120,7 @@ export default function RegisterPage() {
                   type="text"
                   value={newCategory}
                   onChange={e => setNewCategory(e.target.value)}
-                  placeholder="Nueva categoría..."
+                  placeholder="Ej: Atención General, DIDECO..."
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCategory(); } }}
                 />
                 <button type="button" className={styles.addBtn} onClick={addCategory}>

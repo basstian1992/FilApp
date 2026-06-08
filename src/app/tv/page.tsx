@@ -69,10 +69,25 @@ function TVInner() {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(texto);
     utterance.lang = 'es-CL';
-    const esVoice = voicesRef.current.find(v => v.lang.includes('es-CL') || v.lang.includes('es-419') || v.lang.includes('es'));
-    if (esVoice) utterance.voice = esVoice;
-    utterance.rate = 0.9;
-    utterance.pitch = 1;
+    // Priorizamos voces de alta calidad (Online/Google/Premium) sobre las básicas de escritorio
+    const spanishVoices = voicesRef.current.filter(v => v.lang.includes('es'));
+    let bestVoice = spanishVoices.find(v => v.name.includes('Google') || v.name.includes('Online') || v.name.includes('Premium'));
+    
+    // Si no hay voz "Premium/Google", buscamos al menos una latinoamericana
+    if (!bestVoice) {
+      bestVoice = spanishVoices.find(v => v.lang.includes('es-CL') || v.lang.includes('es-419') || v.lang.includes('es-MX') || v.lang.includes('es-US'));
+    }
+    // Si nada de lo anterior funciona, usamos la primera en español disponible
+    if (!bestVoice && spanishVoices.length > 0) {
+      bestVoice = spanishVoices[0];
+    }
+
+    if (bestVoice) utterance.voice = bestVoice;
+    
+    // Ajustes para que suene un poco más fluida y natural
+    utterance.rate = 0.95; // Ligeramente más pausado
+    utterance.pitch = 1.05; // Un toque más agudo para evitar sonido monótono
+
     window.speechSynthesis.speak(utterance);
   };
 

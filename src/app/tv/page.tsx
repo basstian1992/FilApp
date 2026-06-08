@@ -194,7 +194,7 @@ function TVInner() {
     <main className={styles.container} style={customStyles}>
       <header className={styles.header}>
         <div className={styles.logo} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          {logoUrl ? <img src={logoUrl} alt="Logo" style={{height: '40px', objectFit: 'contain', borderRadius: '4px'}} /> : null}
+          {logoUrl ? <img src={logoUrl} alt="Logo Institución" className={styles.tvLogoImg} /> : null}
           {tvName}
         </div>
         <div className={styles.headerCenter}>

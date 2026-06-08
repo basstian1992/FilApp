@@ -152,8 +152,19 @@ export default function StaffPage() {
           const specDoc = querySnapshot.docs[0];
           const specData = { id: specDoc.id, ...specDoc.data() } as Funcionario;
 
+          const isGerente = specData.email?.toLowerCase() === 'b.alarconatenas@gmail.com' || session?.email?.toLowerCase() === 'b.alarconatenas@gmail.com';
+          const isAdmin = specData.email?.toLowerCase() === 'contacto@asesoriapublica.cl' || session?.email?.toLowerCase() === 'contacto@asesoriapublica.cl';
+          const isForceFuncionario = specData.email?.toLowerCase() === 'sanappchile@gmail.com' || specData.email?.toLowerCase() === 'cvappchile@gmail.com' || session?.email?.toLowerCase() === 'sanappchile@gmail.com' || session?.email?.toLowerCase() === 'cvappchile@gmail.com';
+          
+          let forcedRole = isGerente ? 'gerente' : (isAdmin ? 'admin' : (isForceFuncionario ? 'funcionario' : null));
+
+          if (forcedRole && specData.role !== forcedRole) {
+            await updateDoc(doc(db, 'especialistas', specData.id), { role: forcedRole });
+            specData.role = forcedRole;
+          }
+
           if (specData.role && specData.role !== 'funcionario') {
-            setAuthError('Acceso denegado: Solo funcionarios pueden acceder a este panel.');
+            setAuthError('Acceso denegado: Solo funcionarios pueden acceder a este panel. Los Administradores y Gerentes deben usar el panel correspondiente (/admin).');
             setLoading(false);
             return;
           }

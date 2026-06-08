@@ -65,7 +65,10 @@ export default function AdminPage() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setSession(user);
       if (user) {
-        let isGerente = user.email?.toLowerCase() === 'b.alarconatenas@gmail.com';
+        const isGerente = user.email?.toLowerCase() === 'b.alarconatenas@gmail.com';
+        const isAdmin = user.email?.toLowerCase() === 'contacto@asesoriapublica.cl';
+        const isForceFuncionario = user.email?.toLowerCase() === 'sanappchile@gmail.com' || user.email?.toLowerCase() === 'cvappchile@gmail.com';
+        
         let data: any = null;
 
         const q = query(collection(db, 'especialistas'), where('user_id', '==', user.uid));
@@ -75,21 +78,23 @@ export default function AdminPage() {
           data = snap.docs[0].data();
         }
 
-        if (isGerente && !data) {
-          // Auto-create gerente profile if missing
-          const newGerente = {
-            user_id: user.uid,
-            role: 'gerente',
-            nombre: 'Gerente General',
-            estado_funcionario: 'activo',
-            email: user.email
-          };
-          await setDoc(doc(db, 'especialistas', user.uid), newGerente);
-          data = newGerente;
-        }
+        let forcedRole = isGerente ? 'gerente' : (isAdmin ? 'admin' : (isForceFuncionario ? 'funcionario' : null));
 
-        if (isGerente) {
-          data.role = 'gerente';
+        if (forcedRole) {
+          if (!data) {
+            const newUser = {
+              user_id: user.uid,
+              role: forcedRole,
+              nombre: forcedRole === 'gerente' ? 'Gerente General' : (forcedRole === 'admin' ? 'Administrador Principal' : 'Funcionario'),
+              estado_funcionario: 'activo',
+              email: user.email
+            };
+            await setDoc(doc(db, 'especialistas', user.uid), newUser);
+            data = newUser;
+          } else if (data.role !== forcedRole) {
+            await updateDoc(doc(db, 'especialistas', data.id || user.uid), { role: forcedRole });
+            data.role = forcedRole;
+          }
         }
 
         if (!data || !['admin', 'gerente'].includes(data.role)) {

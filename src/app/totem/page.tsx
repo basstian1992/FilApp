@@ -90,14 +90,18 @@ function TotemInner() {
 
   const handleModeSelect = (mode: 'general' | 'oirs' | 'appointment') => {
     setSelectedMode(mode);
-    if (mode === 'general') setScreen('categories');
+    if (mode === 'general') setScreen('rut');
     else if (mode === 'oirs') setScreen('oirs');
     else if (mode === 'appointment') setScreen('appointment');
   };
 
   const handleCategorySelect = (cat: string) => {
     setSelectedCategory(cat);
-    setScreen('rut');
+    if (selectedMode === 'general') {
+      handleSubmit(cat);
+    } else {
+      setScreen('rut');
+    }
   };
 
   const handleFuncionarioSelect = (f: any) => {
@@ -123,7 +127,7 @@ function TotemInner() {
     return `${body}-${dv}`;
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (overrideCategory?: string) => {
     const instId = institutionIdRef.current;
     if (!rut || !instId) return;
 
@@ -148,11 +152,14 @@ function TotemInner() {
 
       let newNumero = 1;
       const isAppointment = selectedMode === 'appointment';
+      
+      const finalCategory = overrideCategory || selectedCategory;
+
       const departamento = selectedMode === 'oirs'
         ? oirsDepartamento
         : selectedMode === 'appointment'
-          ? (selectedFuncionario ? (selectedFuncionario.departamento || 'Hora Agendada') : (selectedCategory || 'Hora Agendada'))
-          : selectedCategory;
+          ? (selectedFuncionario ? (selectedFuncionario.departamento || 'Hora Agendada') : (finalCategory || 'Hora Agendada'))
+          : finalCategory;
 
       let letraTicket = departamento.charAt(0).toUpperCase();
       if (selectedMode === 'appointment' && selectedFuncionario) {
@@ -349,7 +356,7 @@ function TotemInner() {
             ))}
           </div>
 
-          <button className={styles.primaryBtn} onClick={handleSubmit} disabled={rut.length < 8 || loading}>
+          <button className={styles.primaryBtn} onClick={() => handleSubmit()} disabled={rut.length < 8 || loading}>
             {loading ? 'Generando...' : 'Registrar Consulta'}
           </button>
         </div>
@@ -409,7 +416,18 @@ function TotemInner() {
             if (val.length <= 10) setRut(val);
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && rut.length >= 8 && !loading) handleSubmit();
+            if (e.key === 'Enter' && rut.length >= 8 && !loading) {
+              if (selectedMode === 'general') {
+                const formattedRut = formatRutUI(rut);
+                if (!validateRUT(formattedRut)) {
+                  setErrorMsg('RUT Inválido. Intente nuevamente.');
+                  return;
+                }
+                setScreen('categories');
+              } else {
+                handleSubmit();
+              }
+            }
           }}
           autoFocus
         />
@@ -428,8 +446,19 @@ function TotemInner() {
           ))}
         </div>
 
-        <button className={styles.primaryBtn} onClick={handleSubmit} disabled={rut.length < 8 || loading}>
-          {loading ? 'Generando...' : 'Obtener Turno'}
+        <button className={styles.primaryBtn} onClick={() => {
+          if (selectedMode === 'general') {
+            const formattedRut = formatRutUI(rut);
+            if (!validateRUT(formattedRut)) {
+              setErrorMsg('RUT Inválido. Intente nuevamente.');
+              return;
+            }
+            setScreen('categories');
+          } else {
+            handleSubmit();
+          }
+        }} disabled={rut.length < 8 || loading}>
+          {selectedMode === 'general' ? 'Continuar' : (loading ? 'Generando...' : 'Obtener Turno')}
         </button>
       </div>
     </main>

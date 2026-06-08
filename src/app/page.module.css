@@ -133,8 +133,10 @@
 
 .portalCard {
   background: var(--surface-color);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   padding: 1.5rem;
   text-decoration: none;
   display: flex;
@@ -142,9 +144,10 @@
   align-items: center;
   gap: 0.5rem;
   text-align: center;
-  transition: all 0.25s ease;
+  transition: all var(--transition-normal);
   position: relative;
   overflow: hidden;
+  box-shadow: var(--shadow-premium);
 }
 
 .portalCard::before {
@@ -256,12 +259,15 @@
 
 .actionCard {
   background: var(--surface-color);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: 2rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  box-shadow: var(--shadow-premium);
 }
 
 .actionCard h2 {

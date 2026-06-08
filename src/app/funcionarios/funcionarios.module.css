@@ -19,15 +19,21 @@
 
 .authCard {
   background: var(--surface-color);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   padding: var(--spacing-8);
   border-radius: var(--radius-xl);
   width: 100%;
   max-width: 450px;
   border: 1px solid var(--border-color);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-premium);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-4);
+  transition: all var(--transition-normal);
+}
+.authCard:hover {
+  box-shadow: var(--shadow-hover);
 }
 
 .authCard h2 {
@@ -173,15 +179,20 @@
 }
 
 .statCard {
-  background: rgba(30, 41, 59, 0.6);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-color);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: var(--spacing-8);
   text-align: center;
-  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-premium);
   position: relative;
   overflow: hidden;
+  transition: all var(--transition-normal);
+}
+.statCard:hover {
+  box-shadow: var(--shadow-hover);
 }
 
 .statCard::before {
@@ -279,15 +290,16 @@
 
 /* Active Turno */
 .activeTurnoCard {
-  background: rgba(30, 41, 59, 0.6);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-color);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: var(--spacing-8);
   height: 100%;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-premium);
 }
 
 .activeTurnoCard h2 {
@@ -320,9 +332,9 @@
 }
 
 .emptyStateCard {
-  background: rgba(30, 41, 59, 0.3);
+  background: var(--surface-hover);
   backdrop-filter: blur(8px);
-  border: 2px dashed rgba(255, 255, 255, 0.1);
+  border: 2px dashed var(--border-color);
   border-radius: var(--radius-xl);
   height: 100%;
   display: flex;
@@ -593,13 +605,14 @@
 
 /* WhatsApp Alertas Card */
 .whatsappCard {
-  background: rgba(30, 41, 59, 0.4);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-color);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: var(--spacing-6);
   margin-top: var(--spacing-6);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-premium);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-4);

@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { db } from '@/lib/firebase/client';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { useTheme } from 'next-themes';
 import styles from './tv.module.css';
 import { Volume2, VolumeX, Play, Moon, Sun } from 'lucide-react';
 
@@ -24,7 +25,10 @@ function TVInner() {
   const searchParams = useSearchParams();
   const institutionId = searchParams.get('institution');
 
-  const [isDark, setIsDark] = useState(true);
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const currentTheme = theme === 'system' ? resolvedTheme : theme;
+  const isDark = currentTheme === 'dark';
+
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [nuevosIngresos, setNuevosIngresos] = useState<Turno[]>([]);
   const [currentCall, setCurrentCall] = useState<Turno | null>(null);
@@ -183,7 +187,7 @@ function TVInner() {
           </button>
           <button
             className={styles.themeToggle}
-            onClick={() => setIsDark(!isDark)}
+            onClick={() => setTheme(isDark ? 'light' : 'dark')}
             title={isDark ? 'Modo Claro' : 'Modo Oscuro'}
           >
             {isDark ? <Sun size={18} /> : <Moon size={18} />}

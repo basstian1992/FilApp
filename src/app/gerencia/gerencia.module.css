@@ -50,10 +50,17 @@
 
 .kpiCard {
   background: var(--surface-color);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: var(--spacing-6);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-premium);
+  transition: all var(--transition-normal);
+}
+.kpiCard:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
 }
 
 .kpiWarning {
@@ -93,11 +100,18 @@
   gap: var(--spacing-6);
 }
 
-.configSection, .chartSection {
+.configSection, .chartSection, .actionCard {
   background: var(--surface-color);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: var(--spacing-8);
+  box-shadow: var(--shadow-premium);
+  transition: all var(--transition-normal);
+}
+.configSection:hover, .chartSection:hover, .actionCard:hover {
+  box-shadow: var(--shadow-hover);
 }
 
 .configSection h2, .chartSection h2 {
@@ -337,15 +351,21 @@
 
 .authCard {
   background: var(--surface-color);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   padding: var(--spacing-8);
   border-radius: var(--radius-xl);
   width: 100%;
   max-width: 450px;
   border: 1px solid var(--border-color);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-premium);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-4);
+  transition: all var(--transition-normal);
+}
+.authCard:hover {
+  box-shadow: var(--shadow-hover);
 }
 
 .authCard h2 {
@@ -483,11 +503,14 @@
 
 .modalContent {
   background: var(--surface-color);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
   padding: 2rem;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   width: 90%;
   max-width: 500px;
   border: 1px solid var(--border-color);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 }
 
 .closeBtn {

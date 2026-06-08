@@ -50,10 +50,17 @@
 
 .kpiCard {
   background: var(--surface-color);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: var(--spacing-6);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-premium);
+  transition: all var(--transition-normal);
+}
+.kpiCard:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
 }
 
 .kpiWarning {
@@ -95,9 +102,16 @@
 
 .configSection, .chartSection {
   background: var(--surface-color);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: var(--spacing-8);
+  box-shadow: var(--shadow-premium);
+  transition: all var(--transition-normal);
+}
+.configSection:hover, .chartSection:hover {
+  box-shadow: var(--shadow-hover);
 }
 
 .configSection h2, .chartSection h2 {
@@ -245,10 +259,13 @@
 
 .exportSection {
   background: var(--surface-color);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: var(--spacing-8);
   margin-top: var(--spacing-6);
+  box-shadow: var(--shadow-premium);
 }
 
 .exportSection h2 {

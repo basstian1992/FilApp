@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { db, auth } from '@/lib/firebase/client';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { collection, query, where, getDocs, updateDoc, doc, setDoc, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, setDoc, orderBy, limit, onSnapshot, getDoc } from 'firebase/firestore';
 import { triggerWebhook } from '@/lib/notify';
 import styles from './funcionarios.module.css';
 import { LogOut, User, CheckCircle, SkipForward, Megaphone, Download, Bell, BellRing, Users } from 'lucide-react';
@@ -107,7 +107,6 @@ export default function StaffPage() {
 
   useEffect(() => {
     if (funcionario?.institution_id) {
-      const { onSnapshot } = require('firebase/firestore');
       const unsub = onSnapshot(doc(db, 'institutions', funcionario.institution_id), (docSnap: any) => {
         if (docSnap.exists()) {
           setResetLogs(docSnap.data().reset_logs || []);
@@ -518,7 +517,6 @@ export default function StaffPage() {
     if (!confirm('¿Estás seguro de que deseas reiniciar el conteo diario a cero? Esta acción quedará registrada.')) return;
     
     try {
-      const { getDoc } = require('firebase/firestore');
       const instRef = doc(db, 'institutions', funcionario.institution_id);
       const instSnap = await getDoc(instRef);
       if (instSnap.exists()) {

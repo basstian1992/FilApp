@@ -117,7 +117,7 @@ function TVInner() {
             const depStr = t.departamento ? `de ${t.departamento}` : '';
             const funcStr = t.nombre_funcionario || 'Funcionario';
             const ticketStr = t.letra_ticket ? `${t.letra_ticket} ` : '';
-            const textToSpeak = `Turno ${ticketStr}${t.numero}, por favor acercarse a módulo ${t.letra_especialista}, con ${funcStr} ${depStr}`;
+            const textToSpeak = `Siguiente turno, ${t.letra_ticket ? 'letra ' + t.letra_ticket + ', ' : ''}número ${t.numero}. Dirigirse al módulo ${t.letra_especialista}.`;
             if (audioEnabledRef.current) {
               const ding = new Audio('/ding.mp3');
               ding.play().then(() => setTimeout(() => speak(textToSpeak), 1200)).catch(() => speak(textToSpeak));

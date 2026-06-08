@@ -11,9 +11,10 @@ interface UserDirectoryProps {
   institutionId: string;
   funcionarioId: string;
   funcionarioName: string;
+  role?: string;
 }
 
-export default function UserDirectory({ institutionId, funcionarioId, funcionarioName }: UserDirectoryProps) {
+export default function UserDirectory({ institutionId, funcionarioId, funcionarioName, role = 'funcionario' }: UserDirectoryProps) {
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -245,12 +246,16 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
                         {u.last_modified_by_name ? `Por ${u.last_modified_by_name} el ${new Date(u.last_modified_at || '').toLocaleDateString()}` : '-'}
                       </td>
                       <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <button 
-                          onClick={() => setEditingRut(u.rut)}
-                          style={{ background: 'var(--primary-color)', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
-                        >
-                          <Edit size={16} /> Editar
-                        </button>
+                        {(role === 'admin' || role === 'gerente' || u.last_modified_by_id === funcionarioId) ? (
+                          <button 
+                            onClick={() => setEditingRut(u.rut)}
+                            style={{ background: 'var(--primary-color)', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+                          >
+                            <Edit size={16} /> Editar
+                          </button>
+                        ) : (
+                          <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Solo lectura</span>
+                        )}
                       </td>
                     </tr>
                   ))

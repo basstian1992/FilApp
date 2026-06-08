@@ -4,7 +4,30 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { db, auth } from '@/lib/firebase/client';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, query, where, getDocs, updateDoc, doc, orderBy, limit, onSnapshot, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, orderBy, limit, onSnapshot, getDoc, runTransaction, setDoc } from 'firebase/firestore';
+
+function validateRUT(rut: string) {
+  if (!/^[0-9]+[-|‐]{1}[0-9kK]{1}$/.test(rut)) return false;
+  const tmp = rut.split('-');
+  let digv = tmp[1].toLowerCase();
+  const rutNum = tmp[0];
+  if (digv === 'k') digv = 'k';
+
+  let M = 0, S = 1;
+  let num = parseInt(rutNum, 10);
+  for (; num; num = Math.floor(num / 10)) {
+    S = (S + num % 10 * (9 - M++ % 6)) % 11;
+  }
+  const expectedDv = S ? (S - 1).toString() : 'k';
+  return expectedDv === digv;
+}
+
+function formatRutUI(raw: string) {
+  if (raw.length <= 1) return raw;
+  const body = raw.slice(0, -1);
+  const dv = raw.slice(-1);
+  return `${body}-${dv}`;
+}
 import { triggerWebhook } from '@/lib/notify';
 import styles from './funcionarios.module.css';
 import { LogOut, User, CheckCircle, SkipForward, Megaphone, Download, BellRing, Users } from 'lucide-react';
@@ -70,6 +93,9 @@ export default function StaffPage() {
   const [isSavingWhatsapp, setIsSavingWhatsapp] = useState(false);
   const [testSent, setTestSent] = useState(false);
   const [testError, setTestError] = useState('');
+
+  // Manual Turno State
+  const [manualRut, setManualRut] = useState('');
 
   const funcionarioRef = useRef<Funcionario | null>(null);
   const isFirstEspera = useRef(true);
@@ -354,6 +380,106 @@ export default function StaffPage() {
     } finally {
       setIsSavingWhatsapp(false);
     }
+  };
+
+  const handleManualTicket = async () => {
+    if (!manualRut || !funcionario) return;
+    const formattedRut = formatRutUI(manualRut);
+    if (!validateRUT(formattedRut)) {
+      alert("RUT Inválido.");
+      return;
+    }
+    if (currentTurno) {
+      alert("Finaliza la atención actual primero.");
+      return;
+    }
+    setLoading(true);
+
+    try {
+      const instId = funcionario.institution_id;
+      const userRef = doc(db, 'usuarios', formattedRut);
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) {
+        await setDoc(userRef, { rut: formattedRut, institution_id: instId, created_at: new Date().toISOString() });
+      }
+
+      const instRef = doc(db, 'institutions', instId);
+      const turnoRef = doc(collection(db, 'turnos'));
+
+      const result = await runTransaction(db, async (transaction) => {
+        const instDoc = await transaction.get(instRef);
+        const santiagoNowStr = new Date().toLocaleString("en-US", {timeZone: "America/Santiago"});
+        const nowSCL = new Date(santiagoNowStr);
+        const resetTimeSCL = new Date(nowSCL.getFullYear(), nowSCL.getMonth(), nowSCL.getDate(), 7, 0, 0, 0);
+
+        let currentNumero = instDoc.data()?.currentTurno || 0;
+        let lastReset = instDoc.data()?.ultimo_reinicio || null;
+        let shouldReset = false;
+
+        if (nowSCL >= resetTimeSCL) {
+          if (!lastReset) shouldReset = true;
+          else {
+            const lastResetSCL = new Date(new Date(lastReset).toLocaleString("en-US", {timeZone: "America/Santiago"}));
+            if (lastResetSCL < resetTimeSCL) shouldReset = true;
+          }
+        } else {
+          const yesterdayResetSCL = new Date(resetTimeSCL);
+          yesterdayResetSCL.setDate(yesterdayResetSCL.getDate() - 1);
+          if (!lastReset) shouldReset = true;
+          else {
+            const lastResetSCL = new Date(new Date(lastReset).toLocaleString("en-US", {timeZone: "America/Santiago"}));
+            if (lastResetSCL < yesterdayResetSCL) shouldReset = true;
+          }
+        }
+
+        if (shouldReset) {
+          currentNumero = 0;
+          lastReset = new Date().toISOString();
+        }
+
+        const newNumero = currentNumero + 1;
+        transaction.update(instRef, { currentTurno: newNumero, ultimo_reinicio: lastReset });
+
+        const letraTicket = funcionario.letra_atencion || funcionario.departamento.charAt(0).toUpperCase();
+
+        transaction.set(turnoRef, {
+          institution_id: instId,
+          numero: newNumero,
+          letra_ticket: letraTicket,
+          departamento_solicitado: funcionario.departamento,
+          rut_usuario: formattedRut,
+          estado: 'llamado',
+          created_at: nowSCL.toISOString(),
+          called_at: nowSCL.toISOString(),
+          priority: false,
+          especialista_id: funcionario.id || '',
+          nombre_funcionario: funcionario.nombre || 'Funcionario',
+          departamento: funcionario.departamento || '',
+          cargo_funcionario: funcionario.cargo || '',
+          letra_especialista: letraTicket
+        });
+
+        return { newNumero, letraTicket };
+      });
+
+      await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'atendiendo' });
+      setFuncionario({ ...funcionario, estado_funcionario: 'atendiendo' });
+      setManualRut('');
+
+      triggerWebhook('llamado', {
+        numero: result.newNumero,
+        rut_usuario: formattedRut,
+        especialista_id: funcionario.id || '',
+        nombre_funcionario: funcionario.nombre || 'Funcionario',
+        departamento: funcionario.departamento || '',
+        letra_especialista: result.letraTicket
+      });
+
+    } catch (err) {
+      console.error("Error manual:", err);
+      alert("Error al generar turno manual.");
+    }
+    setLoading(false);
   };
 
   const llamarSiguiente = async () => {
@@ -716,6 +842,34 @@ export default function StaffPage() {
             >
               <Megaphone size={24} /> Llamar Siguiente
             </button>
+          </div>
+
+          <div className={styles.statCard} style={{ background: 'rgba(37, 99, 235, 0.05)', borderColor: 'rgba(37, 99, 235, 0.2)' }}>
+            <h3 style={{ color: 'var(--primary)' }}>Ingreso Manual (Sin Tótem)</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem', marginTop: '0.5rem' }}>
+              Registra e ingresa a un paciente directamente a tu escritorio.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <input
+                type="text"
+                placeholder="RUT (ej: 12345678-9)"
+                value={manualRut ? formatRutUI(manualRut) : ''}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9kK]/gi, '');
+                  if (val.length <= 10) setManualRut(val);
+                }}
+                style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--surface-color)', color: 'var(--text-primary)' }}
+                disabled={currentTurno !== null || loading}
+              />
+              <button
+                className={styles.actionBtn}
+                style={{ background: 'var(--primary)', flexShrink: 0, width: 'auto', padding: '0.75rem 1.5rem', margin: 0, opacity: (currentTurno !== null || manualRut.length < 8) ? 0.5 : 1 }}
+                onClick={handleManualTicket}
+                disabled={currentTurno !== null || loading || manualRut.length < 8}
+              >
+                Ingresar
+              </button>
+            </div>
           </div>
 
           <div className={styles.statCard} style={{ background: 'rgba(220, 38, 38, 0.05)', borderColor: 'rgba(220, 38, 38, 0.2)' }}>

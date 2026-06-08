@@ -23,7 +23,7 @@ import {
 import UserDirectory from '@/components/UserDirectory';
 
 /* ─── Helpers ──────────────────────────────────────────────────────────────── */
-const GERENTE_EMAIL = 'b.alarconatenas@gmail.com';
+const GERENTE_EMAILS = ['b.alarconatenas@gmail.com', 'contacto@asesoriapublica.cl'];
 
 function exportToCSV(filename: string, rows: any[]) {
   if (!rows?.length) { alert('No hay datos para exportar'); return; }
@@ -135,6 +135,10 @@ export default function AdminPage() {
         }
 
         const profile = { id: snap.docs[0].id, ...snap.docs[0].data() } as any;
+
+        if (GERENTE_EMAILS.includes(user.email?.toLowerCase() || '')) {
+          profile.role = 'gerente';
+        }
 
         // Block non-admin/gerente
         if (!['admin', 'gerente'].includes(profile.role)) {
@@ -384,6 +388,20 @@ export default function AdminPage() {
     })));
   };
 
+  const exportAllAdmins = () => {
+    exportToCSV(`todos_los_administradores.csv`, allAdmins.map(a => {
+      const inst = institutions.find(i => i.owner_id === a.id);
+      return {
+        Nombre: a.nombre || '',
+        Email: a.email || '',
+        Cargo: a.cargo || '',
+        Estado: a.estado_funcionario || 'inactivo',
+        Institucion: inst ? inst.name : 'Sin Institución',
+        ID_Institucion: inst ? inst.id : ''
+      };
+    }));
+  };
+
   /* ── Render ─────────────────────────────────────────────────────────────────── */
   if (loading) {
     return (
@@ -435,9 +453,14 @@ export default function AdminPage() {
                 <h2 className={styles.sectionTitle}>Todas las Instituciones</h2>
                 <p className={styles.sectionSub}>{institutions.length} institución{institutions.length !== 1 ? 'es' : ''} registrada{institutions.length !== 1 ? 's' : ''}</p>
               </div>
-              <button className={styles.btnPrimary} onClick={() => setShowInstForm(!showInstForm)}>
-                <Plus size={16} /> Nueva Institución
-              </button>
+              <div style={{display: 'flex', gap: '8px'}}>
+                <button className={styles.btnGhost} onClick={exportAllAdmins} title="Exportar DB Administradores">
+                  <Download size={16} /> Exportar Admins
+                </button>
+                <button className={styles.btnPrimary} onClick={() => setShowInstForm(!showInstForm)}>
+                  <Plus size={16} /> Nueva Institución
+                </button>
+              </div>
             </div>
 
             {showInstForm && (
@@ -552,6 +575,35 @@ export default function AdminPage() {
                 </table>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ─── EMPTY STATE FOR ADMINS WITHOUT INSTITUTIONS ─────────────── */}
+        {!isGerente && view === 'dashboard' && (
+          <div className={styles.emptyState}>
+            <Building2 size={40} />
+            <h2>Bienvenido al Panel de Administración</h2>
+            <p>Aún no tienes una institución asignada o creada.</p>
+            {!showInstForm ? (
+              <button onClick={() => setShowInstForm(true)} className={styles.btnPrimary} style={{ marginTop: '1rem' }}>
+                <PlusCircle size={15} /> Crear mi Institución
+              </button>
+            ) : (
+              <form onSubmit={handleCreateInstitution} className={styles.inlineForm} style={{ marginTop: '1rem' }}>
+                <input
+                  type="text"
+                  value={newInstName}
+                  onChange={e => setNewInstName(e.target.value)}
+                  placeholder="Nombre de la institución…"
+                  required autoFocus
+                  className={styles.inlineInput}
+                />
+                <button type="submit" className={styles.btnPrimary} disabled={instSaving}>
+                  {instSaving ? 'Creando…' : 'Crear'}
+                </button>
+                <button type="button" className={styles.btnGhost} onClick={() => setShowInstForm(false)}>Cancelar</button>
+              </form>
+            )}
           </div>
         )}
 

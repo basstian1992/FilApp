@@ -31,9 +31,10 @@ export default function LandingPage() {
         let q = query(collection(db, 'especialistas'), where('user_id', '==', user.uid));
         let snap = await getDocs(q);
 
+        const isGerente = user.email?.toLowerCase() === 'b.alarconatenas@gmail.com' || user.email?.toLowerCase() === 'contacto@asesoriapublica.cl';
+
         // Auto-fix special emails
-        const isGerente = user.email?.toLowerCase() === 'b.alarconatenas@gmail.com';
-        const isAdmin = user.email?.toLowerCase() === 'contacto@asesoriapublica.cl';
+        const isAdmin = user.email?.toLowerCase() === 'contacto@asesoriapublica.cl'; // Fallback check
         const isForceFuncionario = user.email?.toLowerCase() === 'sanappchile@gmail.com' || user.email?.toLowerCase() === 'cvappchile@gmail.com';
         
         const forcedRole = isGerente ? 'gerente' : (isAdmin ? 'admin' : (isForceFuncionario ? 'funcionario' : null));

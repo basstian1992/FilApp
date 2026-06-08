@@ -163,19 +163,24 @@
 }
 
 .mainLayout {
-  display: flex;
-  flex: 1;
-  padding: var(--spacing-6);
+  display: grid;
+  grid-template-columns: 350px 1fr;
   gap: var(--spacing-6);
+  padding: var(--spacing-6);
+  flex: 1;
 }
 
 .panelLeft {
-  flex: 1;
-  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-6);
+  min-width: 0; /* Prevent flex overflow */
 }
 
 .panelRight {
-  flex: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .statCard {
@@ -461,7 +466,7 @@
 
 @media (max-width: 768px) {
   .mainLayout {
-    flex-direction: column;
+    grid-template-columns: 1fr;
     padding: var(--spacing-4);
   }
   .panelLeft {
@@ -611,13 +616,13 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: var(--spacing-6);
-  margin-top: var(--spacing-6);
   box-shadow: var(--shadow-premium);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-4);
   position: relative;
   overflow: hidden;
+  word-break: break-word; /* Prevent text cutoffs */
 }
 
 .whatsappCard::before {

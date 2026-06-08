@@ -69,11 +69,17 @@ function TVInner() {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(texto);
     utterance.lang = 'es-CL';
-    // Priorizamos voces de alta calidad (Online/Google/Premium) sobre las básicas de escritorio
+    // Priorizamos voces de alta calidad (Online/Google/Premium/Natural) sobre las básicas de escritorio
     const spanishVoices = voicesRef.current.filter(v => v.lang.includes('es'));
-    let bestVoice = spanishVoices.find(v => v.name.includes('Google') || v.name.includes('Online') || v.name.includes('Premium'));
+    let bestVoice = spanishVoices.find(v => 
+      v.name.includes('Natural') || 
+      v.name.includes('Online') || 
+      v.name.includes('Google') || 
+      v.name.includes('Premium') ||
+      v.name.includes('Multilingual Online')
+    );
     
-    // Si no hay voz "Premium/Google", buscamos al menos una latinoamericana
+    // Si no hay voz "Premium/Natural", buscamos al menos una latinoamericana
     if (!bestVoice) {
       bestVoice = spanishVoices.find(v => v.lang.includes('es-CL') || v.lang.includes('es-419') || v.lang.includes('es-MX') || v.lang.includes('es-US'));
     }

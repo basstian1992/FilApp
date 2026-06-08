@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { db } from '@/lib/firebase/client';
-import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, setDoc, doc, getDoc } from 'firebase/firestore';
 import { UserData } from './UserForm';
 import { Search, Download, Upload, Edit, Save, X } from 'lucide-react';
 import UserForm from './UserForm';
@@ -24,12 +24,47 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const q = query(collection(db, 'usuarios'), where('institution_id', '==', institutionId));
-      const snap = await getDocs(q);
-      const data = snap.docs.map(d => ({ ...d.data(), rut: d.id } as UserData));
-      setUsers(data);
+      // 1. Get the owner of the current institution
+      const instDoc = await getDoc(doc(db, 'institutions', institutionId));
+      if (!instDoc.exists()) {
+        setLoading(false);
+        return;
+      }
+      const ownerId = instDoc.data().owner_id;
+
+      if (!ownerId) {
+        // Fallback to single institution if no owner
+        const q = query(collection(db, 'usuarios'), where('institution_id', '==', institutionId));
+        const snap = await getDocs(q);
+        setUsers(snap.docs.map(d => ({ ...d.data(), rut: d.id } as UserData)));
+        setLoading(false);
+        return;
+      }
+
+      // 2. Get all institutions belonging to this owner
+      const instsQuery = query(collection(db, 'institutions'), where('owner_id', '==', ownerId));
+      const instsSnap = await getDocs(instsQuery);
+      const allowedInstIds = instsSnap.docs.map(d => d.id);
+
+      if (allowedInstIds.length === 0) {
+        setUsers([]);
+        setLoading(false);
+        return;
+      }
+
+      // 3. Fetch users from all allowed institutions (batch in chunks of 10 for 'in' queries)
+      let allUsers: UserData[] = [];
+      for (let i = 0; i < allowedInstIds.length; i += 10) {
+        const batch = allowedInstIds.slice(i, i + 10);
+        const q = query(collection(db, 'usuarios'), where('institution_id', 'in', batch));
+        const snap = await getDocs(q);
+        const data = snap.docs.map(d => ({ ...d.data(), rut: d.id } as UserData));
+        allUsers = [...allUsers, ...data];
+      }
+      
+      setUsers(allUsers);
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching users:', err);
     }
     setLoading(false);
   };

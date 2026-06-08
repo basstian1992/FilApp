@@ -323,7 +323,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleRegisterUser = async (e: React.FormEvent, forceRole?: 'admin') => {
+  const handleRegisterUser = async (e: React.FormEvent, forceRole?: 'admin' | 'funcionario') => {
     e.preventDefault();
     setNewFuncMessage('');
 
@@ -763,7 +763,7 @@ export default function AdminPage() {
 
             <section className={styles.chartSection} style={{ marginTop: 'var(--spacing-6)' }}>
               <UserDirectory 
-                institutionId={institutionId} 
+                institutionId={institutionId || ''} 
                 funcionarioId={userProfile.user_id} 
                 funcionarioName={userProfile.nombre}
                 role={userProfile.role}

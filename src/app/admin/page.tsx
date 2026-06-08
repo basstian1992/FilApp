@@ -549,14 +549,34 @@ export default function AdminPage() {
                 <p style={{ color: 'var(--text-secondary)' }}>No tienes instituciones creadas.</p>
               ) : (
                 institutions.map(inst => (
-                  <div key={inst.id} onClick={() => openInstitutionDetail(inst.id)} className={styles.configSection} style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.5rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div key={inst.id} className={styles.configSection} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer' }} onClick={() => openInstitutionDetail(inst.id)}>
                       <Building2 size={32} color={inst.config?.tv_primary_color || 'var(--primary)'} />
                       <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-primary)' }}>{inst.name}</h3>
                     </div>
                     <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                      {inst.config?.departamentos?.length || 0} Departamentos
+                      {inst.config?.departamentos?.length || 0} Categorías configuradas
                     </p>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                      <button onClick={() => openInstitutionDetail(inst.id)} className={styles.primaryBtn} style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', flex: 1 }}>
+                        Gestionar (Funcionarios/Usuarios)
+                      </button>
+                      <button 
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            const q = query(collection(db, 'usuarios'), where('institution_id', '==', inst.id));
+                            const snap = await getDocs(q);
+                            const data = snap.docs.map(d => ({ RUT: d.id, ...d.data() }));
+                            exportToCSV(`bd_usuarios_${inst.name.replace(/\s+/g, '_')}.csv`, data);
+                          } catch(err) { alert('Error al exportar BD'); }
+                        }} 
+                        className={styles.exportBtn} 
+                        style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                      >
+                        <Download size={14} /> BD Usuarios
+                      </button>
+                    </div>
                   </div>
                 ))
               )}

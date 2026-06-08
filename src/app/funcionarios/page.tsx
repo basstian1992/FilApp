@@ -65,6 +65,7 @@ export default function StaffPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [activeTab, setActiveTab] = useState<'atencion' | 'directorio'>('atencion');
   const [isUserProfileComplete, setIsUserProfileComplete] = useState(false);
+  const [resetLogs, setResetLogs] = useState<any[]>([]);
 
   // WhatsApp states
   const [whatsappPhone, setWhatsappPhone] = useState('');
@@ -103,6 +104,18 @@ export default function StaffPage() {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (funcionario?.institution_id) {
+      const { onSnapshot } = require('firebase/firestore');
+      const unsub = onSnapshot(doc(db, 'institutions', funcionario.institution_id), (docSnap: any) => {
+        if (docSnap.exists()) {
+          setResetLogs(docSnap.data().reset_logs || []);
+        }
+      });
+      return () => unsub();
+    }
+  }, [funcionario?.institution_id]);
 
   const connectSocket = (institutionId: string, funcionarioUserId: string) => {
     const initSocket = async () => {
@@ -500,6 +513,39 @@ export default function StaffPage() {
     setLoading(false);
   };
 
+  const handleReiniciarConteo = async () => {
+    if (!funcionario?.institution_id) return;
+    if (!confirm('¿Estás seguro de que deseas reiniciar el conteo diario a cero? Esta acción quedará registrada.')) return;
+    
+    try {
+      const { getDoc } = require('firebase/firestore');
+      const instRef = doc(db, 'institutions', funcionario.institution_id);
+      const instSnap = await getDoc(instRef);
+      if (instSnap.exists()) {
+        const data = instSnap.data();
+        const logs = data.reset_logs || [];
+        
+        const newLog = {
+          nombre: funcionario.nombre,
+          fecha: new Date().toISOString()
+        };
+        
+        const updatedLogs = [newLog, ...logs].slice(0, 3);
+        
+        await updateDoc(instRef, {
+          currentTurno: 0,
+          ultimo_reinicio: new Date().toISOString(),
+          reset_logs: updatedLogs
+        });
+        
+        alert("El conteo se ha reiniciado correctamente.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error al reiniciar conteo");
+    }
+  };
+
   const exportToCSV = (filename: string, rows: any[]) => {
     if (!rows || !rows.length) {
       alert("No hay datos para exportar");
@@ -742,6 +788,30 @@ export default function StaffPage() {
             >
               <Megaphone size={24} /> Llamar Siguiente
             </button>
+          </div>
+
+          <div className={styles.statCard} style={{ background: 'rgba(220, 38, 38, 0.05)', borderColor: 'rgba(220, 38, 38, 0.2)' }}>
+            <h3 style={{ color: 'var(--destructive)' }}>Reinicio de Conteo</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem', marginTop: '0.5rem' }}>
+              Usa esto solo si hubo un error en la apertura. El contador volverá a 0.
+            </p>
+            <button
+              className={styles.actionBtn}
+              style={{ background: 'var(--destructive)', boxShadow: '0 4px 14px rgba(220, 38, 38, 0.3)' }}
+              onClick={handleReiniciarConteo}
+            >
+              Reiniciar Conteo a 0
+            </button>
+            {resetLogs.length > 0 && (
+              <div style={{ marginTop: '1rem', fontSize: '0.8rem', color: 'var(--text-tertiary)', textAlign: 'left' }}>
+                <strong>Últimos reinicios:</strong>
+                <ul style={{ margin: 0, paddingLeft: '1rem', marginTop: '0.25rem' }}>
+                  {resetLogs.map((log, i) => (
+                    <li key={i}>{log.nombre} - {new Date(log.fecha).toLocaleString()}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           <div className={styles.whatsappCard}>

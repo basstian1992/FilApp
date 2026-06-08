@@ -18,10 +18,13 @@ export default function AdminPage() {
 
   const [tvName, setTvName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [tvPrimaryColor, setTvPrimaryColor] = useState('#3b82f6');
+  const [tvBackgroundUrl, setTvBackgroundUrl] = useState('');
   const [mensajeDia, setMensajeDia] = useState('');
   const [departamentosStr, setDepartamentosStr] = useState('OIRS, Atención General');
   const [oirsDepartamento, setOirsDepartamento] = useState('OIRS');
   const [webhookUrl, setWebhookUrl] = useState('');
+  const [resetLogs, setResetLogs] = useState<any[]>([]);
   const [savingConfig, setSavingConfig] = useState(false);
   const [stats, setStats] = useState({
     enEspera: 0,
@@ -69,10 +72,13 @@ export default function AdminPage() {
               setInstitutionName(instData.name || '');
               setTvName(instData.config?.tv_name || instData.name || '');
               setLogoUrl(instData.config?.logo_url || '');
+              setTvPrimaryColor(instData.config?.tv_primary_color || '#3b82f6');
+              setTvBackgroundUrl(instData.config?.tv_background_url || '');
               setMensajeDia(instData.config?.mensaje_dia || '');
               setDepartamentosStr((instData.config?.departamentos || ['OIRS', 'Atención General']).join(', '));
               setOirsDepartamento(instData.config?.oirs_departamento || 'OIRS');
               setWebhookUrl(instData.config?.n8n_webhook_url || '');
+              setResetLogs(instData.reset_logs || []);
             }
             await loadFuncionarios(data.institution_id);
           }
@@ -165,6 +171,39 @@ export default function AdminPage() {
     router.push('/');
   };
 
+  const handleReiniciarConteo = async () => {
+    if (!institutionId || !userProfile) return;
+    if (!confirm('¿Estás seguro de que deseas reiniciar el conteo diario a cero? Esta acción quedará registrada.')) return;
+    
+    try {
+      const instRef = doc(db, 'institutions', institutionId);
+      const instSnap = await getDoc(instRef);
+      if (instSnap.exists()) {
+        const data = instSnap.data();
+        const logs = data.reset_logs || [];
+        
+        const newLog = {
+          nombre: userProfile.nombre,
+          fecha: new Date().toISOString()
+        };
+        
+        const updatedLogs = [newLog, ...logs].slice(0, 3);
+        
+        await updateDoc(instRef, {
+          currentTurno: 0,
+          ultimo_reinicio: new Date().toISOString(),
+          reset_logs: updatedLogs
+        });
+        
+        alert("El conteo se ha reiniciado correctamente.");
+        setResetLogs(updatedLogs);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error al reiniciar conteo");
+    }
+  };
+
   const saveConfig = async () => {
     if (!institutionId) return;
     setSavingConfig(true);
@@ -173,6 +212,8 @@ export default function AdminPage() {
         config: {
           tv_name: tvName.trim() || institutionName,
           logo_url: logoUrl.trim(),
+          tv_primary_color: tvPrimaryColor,
+          tv_background_url: tvBackgroundUrl.trim(),
           mensaje_dia: mensajeDia,
           departamentos: departamentosStr.split(',').map(s => s.trim()).filter(Boolean),
           oirs_departamento: oirsDepartamento.trim(),
@@ -418,6 +459,30 @@ export default function AdminPage() {
           </div>
         </section>
 
+        <div className={styles.resetSection} style={{ background: 'rgba(220, 38, 38, 0.05)', border: '1px solid rgba(220, 38, 38, 0.2)', padding: '1.5rem', borderRadius: '16px', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ color: 'var(--destructive)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <AlertTriangle size={20} /> Reinicio Manual de Conteo
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+              Esta acción pondrá el contador de tickets en 0. Usa esto solo si hubo un error en la apertura.
+            </p>
+            {resetLogs.length > 0 && (
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>
+                <strong>Últimos reinicios:</strong>
+                <ul style={{ margin: 0, paddingLeft: '1rem', marginTop: '0.25rem' }}>
+                  {resetLogs.map((log, i) => (
+                    <li key={i}>{log.nombre} - {new Date(log.fecha).toLocaleString()}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+          <button className={styles.destructiveBtn} onClick={handleReiniciarConteo}>
+            Reiniciar Conteo a 0
+          </button>
+        </div>
+
         <div className={styles.bottomGrid}>
           <section className={styles.configSection}>
             <h2>Configuración de la Institución (Pantalla TV)</h2>
@@ -437,6 +502,32 @@ export default function AdminPage() {
                 value={logoUrl}
                 onChange={e => setLogoUrl(e.target.value)}
                 placeholder="https://ejemplo.com/logo.png"
+              />
+            </div>
+            <div className={styles.formGroup}>
+              <label>Color Primario (TV y App)</label>
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                <input
+                  type="color"
+                  value={tvPrimaryColor}
+                  onChange={e => setTvPrimaryColor(e.target.value)}
+                  style={{ width: '50px', height: '40px', padding: '0', cursor: 'pointer', border: '1px solid var(--border-color)', borderRadius: '8px' }}
+                />
+                <input
+                  type="text"
+                  value={tvPrimaryColor}
+                  onChange={e => setTvPrimaryColor(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+              </div>
+            </div>
+            <div className={styles.formGroup}>
+              <label>Fondo de TV Personalizado (URL imagen)</label>
+              <input
+                type="url"
+                value={tvBackgroundUrl}
+                onChange={e => setTvBackgroundUrl(e.target.value)}
+                placeholder="Dejar vacío para usar el tema oscuro por defecto"
               />
             </div>
             <div className={styles.formGroup}>

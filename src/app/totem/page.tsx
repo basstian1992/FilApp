@@ -224,7 +224,7 @@ function TotemInner() {
           departamento_solicitado: departamento,
           rut_usuario: formattedRut,
           estado: 'espera',
-          created_at: now.toISOString(),
+          created_at: nowSCL.toISOString(),
           priority: isAppointment,
           funcionario_id: isAppointment && finalFunc ? finalFunc.id : null,
           funcionario_nombre: isAppointment && finalFunc ? finalFunc.nombre : null,

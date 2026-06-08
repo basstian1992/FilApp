@@ -37,6 +37,8 @@ function TVInner() {
   const [mensajeDia, setMensajeDia] = useState('Bienvenidos a nuestra institución.');
   const [tvName, setTvName] = useState('FilApp');
   const [logoUrl, setLogoUrl] = useState('');
+  const [tvPrimaryColor, setTvPrimaryColor] = useState('');
+  const [tvBackgroundUrl, setTvBackgroundUrl] = useState('');
   const [clock, setClock] = useState('');
 
   const audioEnabledRef = useRef(isAudioEnabled);
@@ -84,6 +86,8 @@ function TVInner() {
           if (cfg.mensaje_dia) setMensajeDia(cfg.mensaje_dia);
           if (cfg.tv_name) setTvName(cfg.tv_name);
           if (cfg.logo_url) setLogoUrl(cfg.logo_url);
+          if (cfg.tv_primary_color) setTvPrimaryColor(cfg.tv_primary_color);
+          if (cfg.tv_background_url) setTvBackgroundUrl(cfg.tv_background_url);
         }
       } catch (e) {}
     };
@@ -166,8 +170,13 @@ function TVInner() {
     );
   }
 
+  const customStyles = {
+    '--tv-primary': tvPrimaryColor || '#3b82f6',
+    '--tv-bg-image': tvBackgroundUrl ? `url("${tvBackgroundUrl}")` : 'none',
+  } as React.CSSProperties;
+
   return (
-    <main className={styles.container}>
+    <main className={styles.container} style={customStyles}>
       <header className={styles.header}>
         <div className={styles.logo} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {logoUrl ? <img src={logoUrl} alt="Logo" style={{height: '40px', objectFit: 'contain', borderRadius: '4px'}} /> : null}

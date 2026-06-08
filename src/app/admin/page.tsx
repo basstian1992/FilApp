@@ -282,6 +282,11 @@ export default function AdminPage() {
 
   const saveConfig = async () => {
     if (!institutionId) return;
+    const deptosList = deptosStr.split(',').map(s => s.trim()).filter(Boolean);
+    if (deptosList.length > 200) {
+      alert(`⚠️ Has ingresado ${deptosList.length} categorías. El límite máximo es de 200 por institución.`);
+      return;
+    }
     setSavingConfig(true);
     await updateDoc(doc(db, 'institutions', institutionId), {
       config: {
@@ -290,14 +295,15 @@ export default function AdminPage() {
         tv_primary_color: tvColor,
         tv_background_url: tvBg.trim(),
         mensaje_dia: mensajeDia,
-        departamentos: deptosStr.split(',').map(s => s.trim()).filter(Boolean),
+        departamentos: deptosList,
         oirs_departamento: oirsDpto.trim(),
         n8n_webhook_url: webhookUrl.trim(),
       }
     });
-    alert('✅ Configuración guardada');
+    alert(`✅ Configuración guardada (${deptosList.length}/200 categorías)`);
     setSavingConfig(false);
   };
+
 
   const handleReiniciarConteo = async () => {
     if (!institutionId || !userProfile) return;
@@ -640,7 +646,18 @@ export default function AdminPage() {
                   <textarea rows={2} value={mensajeDia} onChange={e=>setMensajeDia(e.target.value)} placeholder="Escribe el mensaje desplazable de la TV..." />
                 </div>
                 <div className={styles.formGroup}>
-                  <label>Categorías / Departamentos (separados por coma)</label>
+                  {(() => {
+                    const count = deptosStr.split(',').map(s=>s.trim()).filter(Boolean).length;
+                    const isOver = count > 200;
+                    return (
+                      <label style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                        <span>Categorías / Departamentos (separados por coma)</span>
+                        <span style={{ fontWeight:'bold', color: isOver ? 'var(--destructive)' : count > 180 ? '#f59e0b' : 'var(--text-secondary)', fontSize:'0.82rem' }}>
+                          {count}/200 {isOver ? '⚠️ Excedido' : ''}
+                        </span>
+                      </label>
+                    );
+                  })()}
                   <textarea rows={5} value={deptosStr} onChange={e=>setDeptosStr(e.target.value)} placeholder="OIRS, DIDECO, Atención General, ..." />
                 </div>
                 <div className={styles.formGroup}>

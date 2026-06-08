@@ -47,8 +47,9 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
     
     // Ordered columns for Export
     const orderedKeys = [
-      'rut', 'nombre_completo', 'telefono', 'correo', 'region', 'provincia', 'comuna', 'direccion', 
-      'ocupacion', 'discapacidad', 'prevision_salud', 'prevision_social', 'percapitado', 
+      'id_ficha', 'rut', 'nacionalidad', 'nombre_completo', 'telefono', 'correo', 'region', 'provincia', 'comuna', 'direccion', 
+      'ocupacion', 'discapacidad', 'enfermedad_base', 'funcionarios_atienden', 'nivel_educacional', 'intereses_usuario', 'derivado',
+      'prevision_salud', 'prevision_social', 'percapitado', 
       'programa_asiste', 'rsh', 'beneficios_asignados', 'observacion_relevante', 'otro_dato',
       'last_modified_by_name', 'last_modified_at'
     ];
@@ -162,7 +163,8 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
 
   const filteredUsers = users.filter(u => 
     u.rut.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (u.nombre_completo && u.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase()))
+    (u.nombre_completo && u.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (u.id_ficha && u.id_ficha.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -217,6 +219,7 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                  <th style={{ padding: '1rem' }}>ID Ficha</th>
                   <th style={{ padding: '1rem' }}>RUT</th>
                   <th style={{ padding: '1rem' }}>Nombre Completo</th>
                   <th style={{ padding: '1rem' }}>Teléfono</th>
@@ -233,6 +236,7 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
                 ) : (
                   filteredUsers.map(u => (
                     <tr key={u.rut} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '1rem', color: 'var(--primary-color)' }}>{u.id_ficha || '-'}</td>
                       <td style={{ padding: '1rem', color: 'var(--text-primary)' }}>{u.rut}</td>
                       <td style={{ padding: '1rem', color: 'white' }}>{u.nombre_completo || 'Sin nombre'}</td>
                       <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>{u.telefono || '-'}</td>

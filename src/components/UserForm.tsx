@@ -7,15 +7,23 @@ import { regionesChile } from '@/lib/chile-locations';
 import { Save } from 'lucide-react';
 
 export interface UserData {
+  id_ficha: string;
   nombre_completo: string;
+  nacionalidad: string;
   rut: string;
   region: string;
   provincia: string;
   comuna: string;
   direccion: string;
-  ocupacion: string;
   telefono: string;
   discapacidad: string;
+  
+  ocupacion: string;
+  enfermedad_base: string;
+  funcionarios_atienden: string;
+  nivel_educacional: string;
+  intereses_usuario: string;
+  derivado: string;
   
   prevision_salud: string;
   prevision_social: string;
@@ -45,15 +53,22 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<UserData>({
+    id_ficha: `FICHA-${Date.now().toString().slice(-6)}`,
     nombre_completo: '',
+    nacionalidad: 'Chilena',
     rut: rut,
     region: '',
     provincia: '',
     comuna: '',
     direccion: '',
-    ocupacion: '',
     telefono: '',
     discapacidad: 'No',
+    ocupacion: '',
+    enfermedad_base: '',
+    funcionarios_atienden: '',
+    nivel_educacional: '',
+    intereses_usuario: '',
+    derivado: '',
     prevision_salud: '',
     prevision_social: '',
     percapitado: '',
@@ -73,10 +88,14 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
         const snap = await getDoc(docRef);
         if (snap.exists()) {
           const ud = snap.data() as UserData;
+          // Si no tiene id_ficha pero ya existe, le creamos una
+          if (!ud.id_ficha) ud.id_ficha = `FICHA-${Date.now().toString().slice(-6)}`;
+          if (!ud.nacionalidad) ud.nacionalidad = 'Chilena';
+          
           setData(prev => ({ ...prev, ...ud, rut }));
           
           // Check if mandatory fields are complete initially
-          if (ud.nombre_completo && ud.region && ud.comuna && ud.direccion && ud.telefono) {
+          if (ud.nombre_completo && ud.region && ud.comuna && ud.direccion && ud.telefono && ud.id_ficha && ud.nacionalidad) {
             onSaved(true);
           } else {
             onSaved(false);
@@ -111,11 +130,12 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
   const isFormValid = () => {
     return (
       data.nombre_completo.trim() !== '' &&
+      data.id_ficha.trim() !== '' &&
+      data.nacionalidad.trim() !== '' &&
       data.region !== '' &&
       data.provincia !== '' &&
       data.comuna !== '' &&
       data.direccion.trim() !== '' &&
-      data.ocupacion.trim() !== '' &&
       data.telefono.trim() !== '' &&
       data.discapacidad !== ''
     );
@@ -156,6 +176,10 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
       
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
         <div>
+          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>ID Ficha *</label>
+          <input name="id_ficha" value={data.id_ficha} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+        </div>
+        <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>RUT</label>
           <input type="text" value={data.rut} disabled style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.05)' }} />
         </div>
@@ -164,8 +188,8 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
           <input name="nombre_completo" value={data.nombre_completo} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
         </div>
         <div>
-          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Teléfono *</label>
-          <input name="telefono" value={data.telefono} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Nacionalidad *</label>
+          <input name="nacionalidad" value={data.nacionalidad} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
         </div>
       </div>
 
@@ -199,8 +223,8 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
           <input name="direccion" value={data.direccion} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
         </div>
         <div>
-          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Ocupación *</label>
-          <input name="ocupacion" value={data.ocupacion} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Teléfono *</label>
+          <input name="telefono" value={data.telefono} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Discapacidad *</label>
@@ -217,6 +241,32 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
 
       <h4 style={{ margin: '1rem 0 0 0', color: 'var(--text-secondary)' }}>Datos Opcionales y Beneficios</h4>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+        <div>
+          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Ocupación</label>
+          <input name="ocupacion" value={data.ocupacion} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+        </div>
+        <div>
+          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Nivel Educacional</label>
+          <input name="nivel_educacional" value={data.nivel_educacional} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+        </div>
+        <div>
+          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Enfermedad Base</label>
+          <input name="enfermedad_base" value={data.enfermedad_base} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+        </div>
+        <div>
+          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Funcionarios que le atienden</label>
+          <input name="funcionarios_atienden" value={data.funcionarios_atienden} onChange={handleChange} placeholder="Ej: Dr. Pérez, Asistente Gómez" style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+        </div>
+        <div>
+          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Intereses del Usuario</label>
+          <input name="intereses_usuario" value={data.intereses_usuario} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+        </div>
+        <div>
+          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Derivado</label>
+          <input name="derivado" value={data.derivado} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Previsión de Salud</label>
           <input name="prevision_salud" value={data.prevision_salud} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />

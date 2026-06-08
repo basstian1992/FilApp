@@ -23,6 +23,7 @@ interface Funcionario {
   letra_atencion: string;
   whatsapp_phone?: string;
   whatsapp_apikey?: string;
+  email?: string;
 }
 
 interface Turno {

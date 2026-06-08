@@ -33,7 +33,7 @@ export default function LandingPage() {
             const instSnap = await getDoc(doc(db, 'institutions', data.institution_id));
             if (instSnap.exists()) setInstitutionName(instSnap.data().name || '');
           }
-          if (data.role === 'admin') router.push('/admin');
+          if (data.role === 'admin' || data.role === 'gerente') router.push('/admin');
           else if (data.role === 'funcionario') router.push('/funcionarios');
         }
       } else {

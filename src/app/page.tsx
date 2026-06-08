@@ -5,36 +5,87 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { db, auth } from '@/lib/firebase/client';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 import styles from './page.module.css';
-import { Building2, LogOut, Users, MonitorUp, Settings, ArrowRight } from 'lucide-react';
+import {
+  Building2, LogOut, Users, MonitorPlay, Settings, ArrowRight,
+  ShieldCheck, UserCog, Briefcase, Eye, EyeOff, ChevronRight
+} from 'lucide-react';
 
 export default function LandingPage() {
   const router = useRouter();
   const [session, setSession] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [institutionName, setInstitutionName] = useState('');
-  const [showLogin, setShowLogin] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loginLoading, setLoginLoading] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setSession(user);
       if (user) {
-        const q = query(collection(db, 'especialistas'), where('user_id', '==', user.uid));
-        const snap = await getDocs(q);
+        let q = query(collection(db, 'especialistas'), where('user_id', '==', user.uid));
+        let snap = await getDocs(q);
+
+        // Auto-fix special emails
+        const isGerente = user.email?.toLowerCase() === 'b.alarconatenas@gmail.com';
+        const isAdmin = user.email?.toLowerCase() === 'contacto@asesoriapublica.cl';
+        const isForceFuncionario = user.email?.toLowerCase() === 'sanappchile@gmail.com' || user.email?.toLowerCase() === 'cvappchile@gmail.com';
+        
+        const forcedRole = isGerente ? 'gerente' : (isAdmin ? 'admin' : (isForceFuncionario ? 'funcionario' : null));
+        const expectedName = isGerente ? 'Gerente General' : (isAdmin ? 'Administrador Principal' : 'Funcionario');
+
+        if (forcedRole) {
+          if (snap.empty) {
+            await setDoc(doc(db, 'especialistas', user.uid), {
+              user_id: user.uid,
+              role: forcedRole,
+              nombre: expectedName,
+              email: user.email,
+              estado_funcionario: 'activo',
+              departamento: forcedRole === 'funcionario' ? 'Atención General' : 'Administración',
+              cargo: expectedName,
+              letra_atencion: 'A',
+            });
+            snap = await getDocs(q);
+          } else {
+            const data = snap.docs[0].data() as any;
+            if (data.role !== forcedRole || data.nombre !== expectedName) {
+              await updateDoc(doc(db, 'especialistas', snap.docs[0].id), { role: forcedRole, nombre: expectedName });
+              snap = await getDocs(q);
+            }
+          }
+        }
+
         if (!snap.empty) {
           const data = snap.docs[0].data() as any;
+
+          if (data.estado_funcionario === 'pendiente') {
+            await signOut(auth);
+            setLoginError('Su cuenta está pendiente de autorización por Gerencia.');
+            setLoading(false);
+            return;
+          }
+
           setUserProfile(data);
           if (data.institution_id) {
             const instSnap = await getDoc(doc(db, 'institutions', data.institution_id));
             if (instSnap.exists()) setInstitutionName(instSnap.data().name || '');
           }
-          if (data.role === 'admin' || data.role === 'gerente') router.push('/admin');
-          else if (data.role === 'funcionario') router.push('/funcionarios');
+          // Auto-redirect on login
+          if (data.role === 'admin' || data.role === 'gerente') {
+            router.push('/admin');
+          } else if (data.role === 'funcionario') {
+            router.push('/funcionarios');
+          }
+        } else {
+          // If a random user logs in but has no profile, log them out.
+          await signOut(auth);
+          setLoginError('Cuenta no registrada. Comuníquese con administración.');
         }
       } else {
         setUserProfile(null);
@@ -47,15 +98,20 @@ export default function LandingPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setLoginLoading(true);
     setLoginError('');
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      setShowLogin(false);
+      // redirect handled by useEffect above
     } catch (err: any) {
-      setLoginError(err.message || 'Credenciales inválidas.');
+      const code = err.code;
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+        setLoginError('Correo o contraseña incorrectos.');
+      } else {
+        setLoginError(err.message || 'Error al iniciar sesión.');
+      }
     } finally {
-      setLoading(false);
+      setLoginLoading(false);
     }
   };
 
@@ -67,110 +123,237 @@ export default function LandingPage() {
 
   if (loading) {
     return (
-      <main className={styles.container}>
-        <div className={styles.loadingScreen}>
-          <div className={styles.loadingDot} />
+      <div className={styles.loadingScreen}>
+        <div className={styles.loadingSpinner}>
+          <div className={styles.spinnerRing} />
+          <div className={styles.spinnerDot} />
         </div>
-      </main>
+        <p className={styles.loadingText}>FilApp OS</p>
+      </div>
     );
   }
 
+  /* ─── Logged-in portal selector ─────────────────────────────────────────── */
   if (session && userProfile) {
+    const roleLabel =
+      userProfile.role === 'gerente' ? 'Gerente General' :
+      userProfile.role === 'admin'   ? 'Administrador'   : 'Funcionario';
+    const roleColor =
+      userProfile.role === 'gerente' ? 'gerente' :
+      userProfile.role === 'admin'   ? 'admin'   : 'funcionario';
+
     return (
       <main className={styles.container}>
         <div className={styles.userBar}>
           <div className={styles.userBarLeft}>
             <Building2 size={18} />
-            <span className={styles.instName}>{institutionName}</span>
-            <span className={styles.roleBadge} data-role={userProfile.role}>
-              {userProfile.role === 'admin' ? 'Administrador' : 'Funcionario'}
+            <span className={styles.instName}>{institutionName || 'FilApp OS'}</span>
+            <span className={styles.roleBadge} data-role={roleColor}>
+              {roleLabel}
             </span>
           </div>
           <div className={styles.userBarRight}>
             <span className={styles.userEmail}>{session.email}</span>
             <button onClick={handleLogout} className={styles.logoutBtn}>
-              <LogOut size={15} /> Salir
+              <LogOut size={15} /> Cerrar Sesión
             </button>
           </div>
         </div>
 
         <div className={styles.heroSmall}>
           <div className={styles.badge}>FilApp OS</div>
-          <h1 className={styles.titleSmall}>Buen día, {userProfile.nombre || 'usuario'}</h1>
+          <h1 className={styles.titleSmall}>Bienvenido, {userProfile.nombre || 'usuario'}</h1>
           <p className={styles.subtitle}>Seleccione un portal para continuar.</p>
         </div>
 
         <div className={styles.portalGrid}>
-          {userProfile.role === 'admin' && (
-            <Link href="/admin" className={styles.portalCard}>
-              <div className={styles.portalIcon}><Settings size={28} /></div>
-              <span className={styles.portalLabel}>Administración</span>
-              <span className={styles.portalDesc}>Configuración, métricas y usuarios</span>
+          {(userProfile.role === 'admin' || userProfile.role === 'gerente') && (
+            <Link href="/admin" className={`${styles.portalCard} ${styles.portalAdmin}`}>
+              <div className={styles.portalIconWrap} data-variant="admin">
+                {userProfile.role === 'gerente'
+                  ? <ShieldCheck size={30} />
+                  : <UserCog size={30} />}
+              </div>
+              <span className={styles.portalLabel}>
+                {userProfile.role === 'gerente' ? 'Panel Gerencial' : 'Administración'}
+              </span>
+              <span className={styles.portalDesc}>
+                {userProfile.role === 'gerente'
+                  ? 'Gestión global de instituciones y admins'
+                  : 'Configuración, métricas y usuarios'}
+              </span>
+              <ChevronRight size={16} className={styles.portalArrow} />
             </Link>
           )}
+
           {userProfile.role === 'funcionario' && (
-            <Link href="/funcionarios" className={styles.portalCard}>
-              <div className={styles.portalIcon}><Users size={28} /></div>
-              <span className={styles.portalLabel}>Atención</span>
-              <span className={styles.portalDesc}>Panel de atención de usuarios</span>
+            <Link href="/funcionarios" className={`${styles.portalCard} ${styles.portalFuncionario}`}>
+              <div className={styles.portalIconWrap} data-variant="funcionario">
+                <Briefcase size={30} />
+              </div>
+              <span className={styles.portalLabel}>Panel de Atención</span>
+              <span className={styles.portalDesc}>Gestión de turnos y atención de usuarios</span>
+              <ChevronRight size={16} className={styles.portalArrow} />
             </Link>
           )}
-          <Link href="/tv" className={styles.portalCard}>
-            <div className={styles.portalIcon}><MonitorUp size={28} /></div>
-            <span className={styles.portalLabel}>Pantalla TV</span>
-            <span className={styles.portalDesc}>Visualización para sala de espera</span>
-          </Link>
-          <Link href={`/totem?institution=${userProfile.institution_id || ''}`} className={styles.portalCard}>
-            <div className={styles.portalIcon}><Users size={28} /></div>
-            <span className={styles.portalLabel}>Tótem</span>
-            <span className={styles.portalDesc}>Autoatención de pacientes</span>
-          </Link>
+
+          {userProfile.institution_id && (
+            <a
+              href={`/tv?institution=${userProfile.institution_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${styles.portalCard} ${styles.portalTv}`}
+            >
+              <div className={styles.portalIconWrap} data-variant="tv">
+                <MonitorPlay size={30} />
+              </div>
+              <span className={styles.portalLabel}>Pantalla TV</span>
+              <span className={styles.portalDesc}>Visualización sala de espera</span>
+              <ChevronRight size={16} className={styles.portalArrow} />
+            </a>
+          )}
+
+          {userProfile.institution_id && (
+            <a
+              href={`/totem?institution=${userProfile.institution_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${styles.portalCard} ${styles.portalTotem}`}
+            >
+              <div className={styles.portalIconWrap} data-variant="totem">
+                <Users size={30} />
+              </div>
+              <span className={styles.portalLabel}>Tótem</span>
+              <span className={styles.portalDesc}>Autoatención de pacientes</span>
+              <ChevronRight size={16} className={styles.portalArrow} />
+            </a>
+          )}
         </div>
       </main>
     );
   }
 
+  /* ─── Public landing (not logged in) ────────────────────────────────────── */
   return (
     <main className={styles.container}>
       <div className={styles.landingSplit}>
+        {/* LEFT — Hero */}
         <div className={styles.landingHero}>
-          <div className={styles.badge}>FilApp OS</div>
-          <h1 className={styles.landingTitle}>Sistema Multi-Institución<br />de Gestión de Filas</h1>
+          <div className={styles.heroGlow} />
+          <div className={styles.badge}>FilApp OS · v2.0</div>
+          <h1 className={styles.landingTitle}>
+            Sistema Multi-Institución<br />
+            <span className={styles.gradientText}>de Gestión de Filas</span>
+          </h1>
           <p className={styles.landingDesc}>
-            Administre la atención de ciudadanos en sus oficinas con una plataforma moderna, en tiempo real y multi-inquilino.
+            Administre la atención de ciudadanos con una plataforma moderna, en tiempo real y multi-inquilino. Roles diferenciados, TV en vivo, tótem y reportes.
           </p>
           <div className={styles.featureList}>
-            <div className={styles.featureItem}>Múltiples instituciones</div>
-            <div className={styles.featureItem}>Roles y permisos</div>
-            <div className={styles.featureItem}>Tótem autoatendido</div>
-            <div className={styles.featureItem}>Pantalla de sala de espera</div>
+            {[
+              'Panel Gerencial Global',
+              'Multi-institución',
+              'Roles y permisos',
+              'Tótem autoatendido',
+              'TV en tiempo real',
+              'Exportación CSV'
+            ].map(f => (
+              <div key={f} className={styles.featureItem}>{f}</div>
+            ))}
+          </div>
+
+          <div className={styles.roleCards}>
+            <div className={styles.roleCard} data-role="gerente">
+              <ShieldCheck size={18} />
+              <div>
+                <strong>Gerente</strong>
+                <span>Gestión global</span>
+              </div>
+            </div>
+            <div className={styles.roleCard} data-role="admin">
+              <UserCog size={18} />
+              <div>
+                <strong>Administrador</strong>
+                <span>Su institución</span>
+              </div>
+            </div>
+            <div className={styles.roleCard} data-role="funcionario">
+              <Briefcase size={18} />
+              <div>
+                <strong>Funcionario</strong>
+                <span>Panel de atención</span>
+              </div>
+            </div>
           </div>
         </div>
 
+        {/* RIGHT — Actions */}
         <div className={styles.landingActions}>
+          {/* Register new institution */}
           <div className={styles.actionCard}>
-            <h2>Crear Institución</h2>
-            <p>Registre su institución y configure sus categorías de atención, funcionarios y módulos.</p>
+            <div className={styles.actionCardHeader}>
+              <Building2 size={22} className={styles.actionCardIcon} />
+              <h2>Nueva Institución</h2>
+            </div>
+            <p>Registre su institución y configure categorías de atención, funcionarios y módulos.</p>
             <Link href="/register" className={styles.primaryBtn}>
-              Registrar Institución <ArrowRight size={18} />
+              Registrar Institución <ArrowRight size={16} />
             </Link>
           </div>
 
           <div className={styles.dividerRow}>
             <span className={styles.dividerLine} />
-            <span className={styles.dividerText}>o</span>
+            <span className={styles.dividerText}>o inicia sesión</span>
             <span className={styles.dividerLine} />
           </div>
 
+          {/* Login */}
           <div className={styles.actionCard}>
-            <h2>Iniciar Sesión</h2>
-            <p>Acceda como administrador o funcionario a su institución.</p>
+            <div className={styles.actionCardHeader}>
+              <Settings size={22} className={styles.actionCardIcon} />
+              <h2>Iniciar Sesión</h2>
+            </div>
+            <p>Accede a tu panel como Gerente, Administrador o Funcionario.</p>
             <form onSubmit={handleLogin} className={styles.loginForm}>
               {loginError && <div className={styles.loginError}>{loginError}</div>}
-              <input type="email" placeholder="Correo electrónico" value={email} onChange={e => setEmail(e.target.value)} required />
-              <input type="password" placeholder="Contraseña" value={password} onChange={e => setPassword(e.target.value)} required />
-              <button type="submit" className={styles.primaryBtn} disabled={loading} style={{ width: '100%' }}>
-                {loading ? 'Ingresando...' : 'Ingresar al panel'}
+              <div className={styles.inputWrap}>
+                <input
+                  type="email"
+                  placeholder="Correo electrónico"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                />
+              </div>
+              <div className={styles.inputWrap}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Contraseña"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  className={styles.eyeBtn}
+                  onClick={() => setShowPassword(v => !v)}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              <button
+                type="submit"
+                className={styles.primaryBtn}
+                disabled={loginLoading}
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                {loginLoading ? (
+                  <span className={styles.btnSpinner} />
+                ) : (
+                  <>Ingresar al Panel <ChevronRight size={16} /></>
+                )}
               </button>
             </form>
           </div>

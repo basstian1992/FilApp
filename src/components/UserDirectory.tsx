@@ -95,40 +95,40 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
     reader.onload = async (event) => {
       try {
         const text = event.target?.result as string;
-        const rows = text.split('\n');
-        if (rows.length < 2) throw new Error("CSV vacío");
+        // Normalize line endings
+        const rows = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+        if (rows.length < 2) throw new Error('CSV vacío o sin datos');
 
-        const headers = rows[0].split(';').map(h => h.trim().replace(/"/g, ''));
-        
+        // Parse header — separator is ALWAYS semicolon (;) to match export
+        const sep = ';';
+        const headers = rows[0].split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
+
         const rutIndex = headers.indexOf('rut');
-        if (rutIndex === -1) throw new Error("El CSV debe contener una columna 'rut'");
+        if (rutIndex === -1) throw new Error("El CSV debe contener una columna 'rut'. Asegúrese de exportar desde FilApp primero.");
 
         let successCount = 0;
 
         for (let i = 1; i < rows.length; i++) {
-          if (!rows[i].trim()) continue;
-          
-          // Basic CSV parsing handling quotes
-          const regex = /(".*?"|[^",\s]+)(?=\s*,|\s*$)/g;
+          const row = rows[i].trim();
+          if (!row) continue;
+
+          // CSV parser — semicolon separator with double-quote escaping
           const cols: string[] = [];
-          let match;
-          // Si la fila está vacía, saltar
-          if(rows[i].trim() === '') continue;
-          
           let inQuotes = false;
           let currentVal = '';
-          for (let char of rows[i]) {
-            if (char === '"') inQuotes = !inQuotes;
-            else if (char === ';' && !inQuotes) {
+          for (const char of row) {
+            if (char === '"') {
+              inQuotes = !inQuotes;
+            } else if (char === sep && !inQuotes) {
               cols.push(currentVal.trim());
               currentVal = '';
             } else {
               currentVal += char;
             }
           }
-          cols.push(currentVal.trim());
+          cols.push(currentVal.trim()); // last column
 
-          const rut = cols[rutIndex];
+          const rut = cols[rutIndex]?.replace(/^"|"$/g, '').trim();
           if (!rut) continue;
 
           const docData: any = {
@@ -139,9 +139,9 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
           };
 
           headers.forEach((h, index) => {
-            if (h !== 'rut' && cols[index] !== undefined) {
-              // Limpiar quotes
-              docData[h] = cols[index].replace(/^"|"$/g, '');
+            if (h !== 'rut' && h !== 'last_modified_by_id' && cols[index] !== undefined) {
+              // Strip surrounding quotes from values
+              docData[h] = cols[index].replace(/^"|"$/g, '').trim();
             }
           });
 
@@ -149,15 +149,16 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
           successCount++;
         }
 
-        alert(`Importación completada. Se procesaron ${successCount} usuarios.`);
+        alert(`✅ Importación completada.\n${successCount} usuarios procesados.`);
         fetchUsers();
       } catch (err: any) {
         console.error(err);
-        alert('Error al importar: ' + err.message);
+        alert('❌ Error al importar:\n' + err.message);
       }
       setLoading(false);
     };
-    reader.readAsText(file);
+    // Read as UTF-8 to handle special characters (ñ, á, etc.)
+    reader.readAsText(file, 'UTF-8');
     e.target.value = '';
   };
 

@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { db, auth } from '@/lib/firebase/client';
-import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { collection, query, where, getDocs, updateDoc, doc, setDoc, orderBy, limit, onSnapshot, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { collection, query, where, getDocs, updateDoc, doc, orderBy, limit, onSnapshot, getDoc } from 'firebase/firestore';
 import { triggerWebhook } from '@/lib/notify';
 import styles from './funcionarios.module.css';
-import { LogOut, User, CheckCircle, SkipForward, Megaphone, Download, Bell, BellRing, Users } from 'lucide-react';
+import { LogOut, User, CheckCircle, SkipForward, Megaphone, Download, BellRing, Users } from 'lucide-react';
 import UserForm from '@/components/UserForm';
 import UserDirectory from '@/components/UserDirectory';
 
@@ -44,13 +45,8 @@ interface Notification {
 }
 
 export default function StaffPage() {
+  const router = useRouter();
   const [session, setSession] = useState<any>(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [nombre, setNombre] = useState('');
-  const [departamento, setDepartamento] = useState('OMIL');
-  const [cargo, setCargo] = useState('');
-  const [letraAtencion, setLetraAtencion] = useState('');
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState('');
   const [isEditingLetra, setIsEditingLetra] = useState(false);
@@ -86,23 +82,14 @@ export default function StaffPage() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        // Not logged in → redirect to landing
+        router.replace('/');
+        return;
+      }
       setSession(user);
-      if (user) fetchFuncionarioData(user.uid);
-      else {
-        setFuncionario(null);
-        setLoading(false);
-      }
+      fetchFuncionarioData(user.uid);
     });
-
-    const fetchConfig = async () => {
-      const c = await getDocs(query(collection(db, 'configuracion')));
-      const globalDoc = c.docs.find(d => d.id === 'global');
-      if (globalDoc && globalDoc.data().departamentos) {
-        setDepartamentosDisponibles(globalDoc.data().departamentos);
-      }
-    };
-    fetchConfig();
-
     return () => unsubscribe();
   }, []);
 
@@ -153,22 +140,10 @@ export default function StaffPage() {
           const specDoc = querySnapshot.docs[0];
           const specData = { id: specDoc.id, ...specDoc.data() } as Funcionario;
 
-          const isGerente = specData.email?.toLowerCase() === 'b.alarconatenas@gmail.com' || session?.email?.toLowerCase() === 'b.alarconatenas@gmail.com';
-          const isAdmin = specData.email?.toLowerCase() === 'contacto@asesoriapublica.cl' || session?.email?.toLowerCase() === 'contacto@asesoriapublica.cl';
-          const isForceFuncionario = specData.email?.toLowerCase() === 'sanappchile@gmail.com' || specData.email?.toLowerCase() === 'cvappchile@gmail.com' || session?.email?.toLowerCase() === 'sanappchile@gmail.com' || session?.email?.toLowerCase() === 'cvappchile@gmail.com';
-          
-          let forcedRole = isGerente ? 'gerente' : (isAdmin ? 'admin' : (isForceFuncionario ? 'funcionario' : null));
-          let expectedName = isGerente ? 'Gerente General' : (isAdmin ? 'Administrador Principal' : 'Funcionario');
-
-          if (forcedRole && (specData.role !== forcedRole || specData.nombre !== expectedName)) {
-            await updateDoc(doc(db, 'especialistas', specData.id), { role: forcedRole, nombre: expectedName });
-            specData.role = forcedRole;
-            specData.nombre = expectedName;
-          }
-
+          // Block non-funcionarios — redirect to /admin
           if (specData.role && specData.role !== 'funcionario') {
-            setAuthError('Acceso denegado: Solo funcionarios pueden acceder a este panel. Los Administradores y Gerentes deben usar el panel correspondiente (/admin).');
-            setLoading(false);
+            await signOut(auth);
+            router.replace('/admin');
             return;
           }
 
@@ -185,6 +160,10 @@ export default function StaffPage() {
             }
           }
           setLoading(false);
+        } else {
+          // Profile not found — redirect to landing
+          await signOut(auth);
+          router.replace('/');
         }
       });
     } catch (e) {
@@ -267,52 +246,7 @@ export default function StaffPage() {
     });
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setAuthError('');
-    try {
-      const userCred = await signInWithEmailAndPassword(auth, email, password);
-      const q = query(collection(db, 'especialistas'), where('user_id', '==', userCred.user.uid));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const data = snap.docs[0].data() as Funcionario;
-        if (data.role && data.role !== 'funcionario') {
-          setAuthError('Acceso denegado: Este panel es solo para funcionarios.');
-          await signOut(auth);
-          setLoading(false);
-        }
-      }
-    } catch (error: any) {
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
-        try {
-          const userCred = await createUserWithEmailAndPassword(auth, email, password);
-          await setDoc(doc(db, 'especialistas', userCred.user.uid), {
-            user_id: userCred.user.uid,
-            role: 'funcionario',
-            nombre: nombre || 'Funcionario Nuevo',
-            departamento: departamento,
-            cargo: cargo || 'Funcionario',
-            estado_funcionario: 'activo',
-            avatar_url: '',
-            letra_atencion: letraAtencion || email.split('@')[0].toUpperCase().substring(0,2),
-            whatsapp_phone: '',
-            whatsapp_apikey: '',
-          });
-        } catch (regError: any) {
-          if (regError.code === 'auth/email-already-in-use') {
-            setAuthError('La contraseña es incorrecta.');
-          } else {
-            setAuthError(regError.message);
-          }
-          setLoading(false);
-        }
-      } else {
-        setAuthError(error.message);
-        setLoading(false);
-      }
-    }
-  };
+  // Login is now handled only from the landing page (/)
 
   const handleLogout = async () => {
     if (funcionario) {
@@ -636,53 +570,20 @@ export default function StaffPage() {
 
   const queueCount = queueDocs.filter(d => d.departamento_solicitado === funcionario?.departamento).length;
 
-  if (loading && !session && !authError) {
-    return <div className={styles.centerLoad}>Cargando entorno...</div>;
+  if (loading) {
+    return (
+      <div className={styles.centerLoad}>
+        <div style={{ width: 36, height: 36, border: '3px solid var(--border-color)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        Cargando panel…
+      </div>
+    );
   }
 
-  if (!session) {
+  if (authError) {
     return (
-      <main className={styles.authContainer}>
-        <form onSubmit={handleLogin} className={styles.authCard}>
-          <h2>Acceso Funcionarios</h2>
-          <p>Inicie sesión con su correo para atender usuarios.</p>
-
-          {authError && <div className={styles.errorBanner}>{authError}</div>}
-
-          <div className={styles.inputGroup}>
-            <label>Correo Electrónico</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-          </div>
-          <div className={styles.inputGroup}>
-            <label>Contraseña</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-          </div>
-          <div className={styles.inputGroup}>
-            <label>Nombre y Apellido (Solo cuenta nueva)</label>
-            <input type="text" placeholder="Ej: Juan Pérez" value={nombre} onChange={e => setNombre(e.target.value)} />
-          </div>
-          <div className={styles.inputGroup}>
-            <label>Departamento (Solo cuenta nueva)</label>
-            <select value={departamento} onChange={e => setDepartamento(e.target.value)} className={styles.select}>
-              {departamentosDisponibles.map(dep => (
-                <option key={dep} value={dep}>{dep}</option>
-              ))}
-            </select>
-          </div>
-          <div className={styles.inputGroup}>
-            <label>Cargo o Función (Solo cuenta nueva)</label>
-            <input type="text" placeholder="Ej: Psicólogo, Asistente..." value={cargo} onChange={e => setCargo(e.target.value)} />
-          </div>
-          <div className={styles.inputGroup}>
-            <label>Módulo / Letra (Solo cuenta nueva)</label>
-            <input type="text" placeholder="Ej: A, B, Box 1" value={letraAtencion} onChange={e => setLetraAtencion(e.target.value)} />
-          </div>
-
-          <button type="submit" className={styles.primaryBtn} disabled={loading}>
-            {loading ? 'Ingresando...' : 'Iniciar Sesión'}
-          </button>
-        </form>
-      </main>
+      <div className={styles.centerLoad}>
+        <p style={{ color: 'var(--destructive)' }}>{authError}</p>
+      </div>
     );
   }
 

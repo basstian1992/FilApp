@@ -79,21 +79,23 @@ export default function AdminPage() {
         }
 
         let forcedRole = isGerente ? 'gerente' : (isAdmin ? 'admin' : (isForceFuncionario ? 'funcionario' : null));
+        let expectedName = isGerente ? 'Gerente General' : (isAdmin ? 'Administrador Principal' : 'Funcionario');
 
         if (forcedRole) {
           if (!data) {
             const newUser = {
               user_id: user.uid,
               role: forcedRole,
-              nombre: forcedRole === 'gerente' ? 'Gerente General' : (forcedRole === 'admin' ? 'Administrador Principal' : 'Funcionario'),
+              nombre: expectedName,
               estado_funcionario: 'activo',
               email: user.email
             };
             await setDoc(doc(db, 'especialistas', user.uid), newUser);
             data = newUser;
-          } else if (data.role !== forcedRole) {
-            await updateDoc(doc(db, 'especialistas', data.id || user.uid), { role: forcedRole });
+          } else if (data.role !== forcedRole || data.nombre !== expectedName) {
+            await updateDoc(doc(db, 'especialistas', data.id || user.uid), { role: forcedRole, nombre: expectedName });
             data.role = forcedRole;
+            data.nombre = expectedName;
           }
         }
 
@@ -383,7 +385,7 @@ export default function AdminPage() {
       alert("No hay datos para exportar");
       return;
     }
-    const separator = ',';
+    const separator = ';';
     const keys = Object.keys(rows[0]);
     const csvContent =
       keys.join(separator) +
@@ -565,6 +567,13 @@ export default function AdminPage() {
                     <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
                       <button onClick={() => openInstitutionDetail(inst.id)} className={styles.primaryBtn} style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', flex: 1 }}>
                         Gestionar (Funcionarios/Usuarios)
+                      </button>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); window.open(`/tv?institution=${inst.id}`, '_blank'); }} 
+                        className={styles.primaryBtn} 
+                        style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', background: 'var(--success)' }}
+                      >
+                        📺 Pantalla TV
                       </button>
                       <button 
                         onClick={async (e) => {

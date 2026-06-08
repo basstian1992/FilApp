@@ -157,10 +157,12 @@ export default function StaffPage() {
           const isForceFuncionario = specData.email?.toLowerCase() === 'sanappchile@gmail.com' || specData.email?.toLowerCase() === 'cvappchile@gmail.com' || session?.email?.toLowerCase() === 'sanappchile@gmail.com' || session?.email?.toLowerCase() === 'cvappchile@gmail.com';
           
           let forcedRole = isGerente ? 'gerente' : (isAdmin ? 'admin' : (isForceFuncionario ? 'funcionario' : null));
+          let expectedName = isGerente ? 'Gerente General' : (isAdmin ? 'Administrador Principal' : 'Funcionario');
 
-          if (forcedRole && specData.role !== forcedRole) {
-            await updateDoc(doc(db, 'especialistas', specData.id), { role: forcedRole });
+          if (forcedRole && (specData.role !== forcedRole || specData.nombre !== expectedName)) {
+            await updateDoc(doc(db, 'especialistas', specData.id), { role: forcedRole, nombre: expectedName });
             specData.role = forcedRole;
+            specData.nombre = expectedName;
           }
 
           if (specData.role && specData.role !== 'funcionario') {
@@ -523,6 +525,18 @@ export default function StaffPage() {
     setLoading(false);
   };
 
+  const toggleEstadoFuncionario = async () => {
+    if (!funcionario) return;
+    const nuevoEstado = funcionario.estado_funcionario === 'activo' ? 'inactivo' : 'activo';
+    try {
+      await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: nuevoEstado });
+      setFuncionario({ ...funcionario, estado_funcionario: nuevoEstado });
+    } catch (err) {
+      console.error(err);
+      alert('Error al cambiar estado.');
+    }
+  };
+
   const handleReiniciarConteo = async () => {
     if (!funcionario?.institution_id) return;
     if (!confirm('¿Estás seguro de que deseas reiniciar el conteo diario a cero? Esta acción quedará registrada.')) return;
@@ -560,7 +574,7 @@ export default function StaffPage() {
       alert("No hay datos para exportar");
       return;
     }
-    const separator = ',';
+    const separator = ';';
     const keys = Object.keys(rows[0]);
     const csvContent =
       keys.join(separator) +
@@ -705,12 +719,15 @@ export default function StaffPage() {
               <span
                 className={styles.statusDot}
                 data-status={funcionario?.estado_funcionario || 'inactivo'}
-                title={`Estado: ${funcionario?.estado_funcionario || 'inactivo'}`}
+                title={`Estado: ${funcionario?.estado_funcionario || 'inactivo'} (Click para alternar)`}
+                onClick={toggleEstadoFuncionario}
+                style={{ cursor: 'pointer' }}
               />
             </div>
           )}
 
           <div>
+            <strong style={{ fontSize: '1.2rem', display: 'block', marginBottom: '0.2rem', color: 'var(--text-primary)' }}>Buen día colega funcionario</strong>
             <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
               {isEditingLetra ? (
                 <>

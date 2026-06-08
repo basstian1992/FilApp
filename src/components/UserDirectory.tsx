@@ -55,7 +55,7 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
       'last_modified_by_name', 'last_modified_at'
     ];
 
-    const separator = ',';
+    const separator = ';';
     const csvContent =
       orderedKeys.join(separator) +
       '\n' +
@@ -98,7 +98,7 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
         const rows = text.split('\n');
         if (rows.length < 2) throw new Error("CSV vacío");
 
-        const headers = rows[0].split(',').map(h => h.trim().replace(/"/g, ''));
+        const headers = rows[0].split(';').map(h => h.trim().replace(/"/g, ''));
         
         const rutIndex = headers.indexOf('rut');
         if (rutIndex === -1) throw new Error("El CSV debe contener una columna 'rut'");
@@ -115,12 +115,11 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
           // Si la fila está vacía, saltar
           if(rows[i].trim() === '') continue;
           
-          // Hacemos un split rudimentario
           let inQuotes = false;
           let currentVal = '';
           for (let char of rows[i]) {
             if (char === '"') inQuotes = !inQuotes;
-            else if (char === ',' && !inQuotes) {
+            else if (char === ';' && !inQuotes) {
               cols.push(currentVal.trim());
               currentVal = '';
             } else {

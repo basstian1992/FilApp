@@ -118,13 +118,13 @@ export default function AdminPage() {
 
   const loadDashboardData = async (userId: string, role: string) => {
     try {
+      const adminQ = query(collection(db, 'especialistas'), where('role', '==', 'admin'));
+      const adminSnap = await getDocs(adminQ);
+      setAllAdmins(adminSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
       if (role === 'gerente') {
         const instSnap = await getDocs(collection(db, 'institutions'));
         setInstitutions(instSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-        
-        const adminQ = query(collection(db, 'especialistas'), where('role', '==', 'admin'));
-        const adminSnap = await getDocs(adminQ);
-        setAllAdmins(adminSnap.docs.map(d => ({ id: d.id, ...d.data() })));
       } else {
         const q = query(collection(db, 'institutions'), where('owner_id', '==', userId));
         const instSnap = await getDocs(q);
@@ -587,7 +587,6 @@ export default function AdminPage() {
               )}
             </div>
 
-            {userProfile?.role === 'gerente' && (
               <section className={styles.configSection}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: 'var(--spacing-4)' }}>
                   <UserPlus size={20} />
@@ -629,7 +628,6 @@ export default function AdminPage() {
                   </tbody>
                 </table>
               </section>
-            )}
           </div>
         )}
 

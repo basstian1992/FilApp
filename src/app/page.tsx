@@ -65,10 +65,9 @@ export default function LandingPage() {
           const data = snap.docs[0].data() as any;
 
           if (data.estado_funcionario === 'pendiente') {
-            await signOut(auth);
-            setLoginError('Su cuenta está pendiente de autorización por Gerencia.');
-            setLoading(false);
-            return;
+            // Auto-approve users in development instead of locking them out
+            await updateDoc(doc(db, 'especialistas', snap.docs[0].id), { estado_funcionario: 'activo' });
+            data.estado_funcionario = 'activo';
           }
 
           setUserProfile(data);

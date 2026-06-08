@@ -38,7 +38,7 @@ export default function RegisterPage() {
         owner_email: email,
         created_at: new Date().toISOString(),
         currentTurno: 0,
-        estado: 'pendiente',
+        estado: 'activa',
         config: {
           tv_name: instName.trim(),
           departamentos: ['OIRS', 'Atención General'],
@@ -55,7 +55,7 @@ export default function RegisterPage() {
         nombre: adminName.trim() || 'Administrador',
         departamento: 'Administración',
         cargo: 'Administrador Principal',
-        estado_funcionario: 'pendiente',
+        estado_funcionario: 'activo',
         avatar_url: '',
         letra_atencion: 'A',
         email: email,

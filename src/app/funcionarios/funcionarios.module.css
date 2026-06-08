@@ -112,19 +112,24 @@
 }
 
 .topBar {
-  height: 70px;
+  min-height: 70px;
+  height: auto;
   background: var(--surface-color);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--spacing-6);
+  padding: var(--spacing-2) var(--spacing-6);
+  flex-wrap: wrap;
+  gap: var(--spacing-4);
 }
 
 .userInfo {
   display: flex;
   align-items: center;
   gap: var(--spacing-4);
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .userInfo .icon {
@@ -134,16 +139,20 @@
 .userInfo div {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .userInfo strong {
   font-size: 1.125rem;
   color: var(--text-primary);
+  white-space: normal;
+  line-height: 1.2;
 }
 
 .userInfo span {
   font-size: 0.875rem;
   color: var(--text-secondary);
+  white-space: normal;
 }
 
 .logoutBtn {

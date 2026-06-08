@@ -104,6 +104,20 @@ function TotemInner() {
     handleSubmit(undefined, f);
   };
 
+  const handleAppointmentCategorySelect = (cat: string) => {
+    setSelectedCategory(cat);
+    const funcs = funcionarios.filter(f => f.departamento === cat);
+    if (funcs.length === 1) {
+      setSelectedFuncionario(funcs[0]);
+      handleSubmit(cat, funcs[0]);
+    } else if (funcs.length > 1) {
+      setScreen('appointment_funcionario_select');
+    } else {
+      setSelectedFuncionario(null);
+      handleSubmit(cat, null);
+    }
+  };
+
   const handleKeypad = (val: string) => {
     setErrorMsg('');
     if (val === 'DEL') {
@@ -332,7 +346,7 @@ function TotemInner() {
         <div className={styles.glassPanel}>
           <button className={styles.backBtn} onClick={resetFlow}>← Volver</button>
           <h1 className={styles.title}>Atención General</h1>
-          <p className={styles.subtitle}>Seleccione el motivo de su atención</p>
+          <p className={styles.subtitle}>Seleccione donde se dirige</p>
 
           <div className={styles.deptoGrid}>
             {categories.map(cat => (
@@ -353,26 +367,42 @@ function TotemInner() {
         <div className={styles.glassPanel}>
           <button className={styles.backBtn} onClick={resetFlow}>← Volver</button>
           <h1 className={styles.title}>Hora Agendada</h1>
+          <p className={styles.subtitle}>Seleccione categoría donde se dirige</p>
+
+          <div className={styles.deptoGrid}>
+            {categories.map(cat => (
+              <button key={cat} className={styles.deptoBtn} onClick={() => handleAppointmentCategorySelect(cat)}>
+                <strong>{cat}</strong>
+              </button>
+            ))}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (screen === 'appointment_funcionario_select') {
+    const matchingFuncs = funcionarios.filter(f => f.departamento === selectedCategory);
+    return (
+      <main className={styles.container}>
+        <div className={styles.glassPanel}>
+          <button className={styles.backBtn} onClick={() => setScreen('appointment')}>← Volver</button>
+          <h1 className={styles.title}>Hora Agendada - {selectedCategory}</h1>
           <p className={styles.subtitle}>Seleccione el funcionario con quien tiene la cita</p>
 
           <div className={styles.deptoGrid}>
-            {funcionarios.map(f => (
+            {matchingFuncs.map(f => (
               <button key={f.id} className={styles.deptoBtn} onClick={() => handleFuncionarioSelect(f)}>
                 <strong>{f.nombre}</strong>
-                <small style={{ display: 'block', fontSize: '0.8rem', opacity: 0.7 }}>{f.departamento}</small>
+                <small style={{ display: 'block', fontSize: '0.8rem', opacity: 0.7 }}>{f.cargo || f.departamento}</small>
               </button>
             ))}
-            {funcionarios.length === 0 && (
-              <p style={{ color: 'var(--text-secondary)', gridColumn: '1/-1', textAlign: 'center' }}>
-                No hay funcionarios disponibles para agendar.
-              </p>
-            )}
             <button className={styles.deptoBtn} style={{ background: 'rgba(255, 255, 255, 0.1)', border: '1px dashed rgba(255,255,255,0.4)' }} onClick={() => {
               setSelectedFuncionario(null);
-              setScreen('categories');
+              handleSubmit(selectedCategory, null);
             }}>
               <strong>No sé el nombre</strong>
-              <small style={{ display: 'block', fontSize: '0.8rem', opacity: 0.7 }}>Elegir por categoría</small>
+              <small style={{ display: 'block', fontSize: '0.8rem', opacity: 0.7 }}>Continuar a la categoría</small>
             </button>
           </div>
         </div>

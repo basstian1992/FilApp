@@ -65,11 +65,19 @@ function TVInner() {
   }, []);
 
   const speak = (texto: string) => {
-    if (!isAudioEnabled) return;
+    if (!isAudioEnabled || !window.speechSynthesis) return;
+    
+    // Si las voces no han cargado aún, intentamos cargarlas forzosamente
+    if (voicesRef.current.length === 0) {
+      voicesRef.current = window.speechSynthesis.getVoices();
+    }
+
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(texto);
-    utterance.lang = 'es-CL';
-    // Priorizamos voces de alta calidad (Online/Google/Premium/Natural) sobre las básicas de escritorio
+    
+    // Evitar garbage collection bug en Chrome
+    (window as any).lastUtterance = utterance;
+
     const spanishVoices = voicesRef.current.filter(v => v.lang.includes('es'));
     let bestVoice = spanishVoices.find(v => 
       v.name.includes('Natural') || 
@@ -79,22 +87,28 @@ function TVInner() {
       v.name.includes('Multilingual Online')
     );
     
-    // Si no hay voz "Premium/Natural", buscamos al menos una latinoamericana
     if (!bestVoice) {
       bestVoice = spanishVoices.find(v => v.lang.includes('es-CL') || v.lang.includes('es-419') || v.lang.includes('es-MX') || v.lang.includes('es-US'));
     }
-    // Si nada de lo anterior funciona, usamos la primera en español disponible
     if (!bestVoice && spanishVoices.length > 0) {
       bestVoice = spanishVoices[0];
     }
 
-    if (bestVoice) utterance.voice = bestVoice;
+    if (bestVoice) {
+      utterance.voice = bestVoice;
+      utterance.lang = bestVoice.lang;
+    } else {
+      utterance.lang = 'es-ES'; // fallback generico seguro
+    }
     
     // Ajustes para que suene un poco más fluida y natural
-    utterance.rate = 0.95; // Ligeramente más pausado
-    utterance.pitch = 1.05; // Un toque más agudo para evitar sonido monótono
+    utterance.rate = 0.9; // Ligeramente más pausado
+    utterance.pitch = 1.0; // Tono neutro
 
-    window.speechSynthesis.speak(utterance);
+    // En Chrome a veces se necesita un pequeño delay
+    setTimeout(() => {
+      window.speechSynthesis.speak(utterance);
+    }, 50);
   };
 
   useEffect(() => {

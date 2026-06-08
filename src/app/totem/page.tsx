@@ -162,11 +162,11 @@ function TotemInner() {
         letraTicket = finalFunc.letra_atencion || departamento.charAt(0).toUpperCase();
       }
 
-      await runTransaction(db, async (transaction) => {
+      const result = await runTransaction(db, async (transaction) => {
         const instDoc = await transaction.get(instRef);
-        const now = new Date();
-        const resetTime = new Date();
-        resetTime.setHours(7, 30, 0, 0);
+        const santiagoNowStr = new Date().toLocaleString("en-US", {timeZone: "America/Santiago"});
+        const nowSCL = new Date(santiagoNowStr);
+        const resetTimeSCL = new Date(nowSCL.getFullYear(), nowSCL.getMonth(), nowSCL.getDate(), 7, 0, 0, 0);
 
         let currentNumero = 0;
         let lastReset = null;
@@ -178,18 +178,29 @@ function TotemInner() {
           lastReset = instDoc.data()?.ultimo_reinicio || null;
         }
 
-        if (now >= resetTime) {
-          if (!lastReset || new Date(lastReset) < resetTime) {
-            currentNumero = 0;
-            lastReset = now.toISOString();
+        let shouldReset = false;
+
+        if (nowSCL >= resetTimeSCL) {
+          if (!lastReset) {
+            shouldReset = true;
+          } else {
+            const lastResetSCL = new Date(new Date(lastReset).toLocaleString("en-US", {timeZone: "America/Santiago"}));
+            if (lastResetSCL < resetTimeSCL) shouldReset = true;
           }
         } else {
-          const yesterdayReset = new Date(resetTime);
-          yesterdayReset.setDate(yesterdayReset.getDate() - 1);
-          if (!lastReset || new Date(lastReset) < yesterdayReset) {
-            currentNumero = 0;
-            lastReset = now.toISOString();
+          const yesterdayResetSCL = new Date(resetTimeSCL);
+          yesterdayResetSCL.setDate(yesterdayResetSCL.getDate() - 1);
+          if (!lastReset) {
+            shouldReset = true;
+          } else {
+            const lastResetSCL = new Date(new Date(lastReset).toLocaleString("en-US", {timeZone: "America/Santiago"}));
+            if (lastResetSCL < yesterdayResetSCL) shouldReset = true;
           }
+        }
+
+        if (shouldReset) {
+          currentNumero = 0;
+          lastReset = new Date().toISOString();
         }
 
         newNumero = currentNumero + 1;

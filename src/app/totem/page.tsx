@@ -90,23 +90,18 @@ function TotemInner() {
 
   const handleModeSelect = (mode: 'general' | 'oirs' | 'appointment') => {
     setSelectedMode(mode);
-    if (mode === 'general') setScreen('rut');
-    else if (mode === 'oirs') setScreen('oirs');
-    else if (mode === 'appointment') setScreen('appointment');
+    setScreen('rut');
   };
 
   const handleCategorySelect = (cat: string) => {
     setSelectedCategory(cat);
-    if (selectedMode === 'general') {
-      handleSubmit(cat);
-    } else {
-      setScreen('rut');
-    }
+    handleSubmit(cat);
   };
 
   const handleFuncionarioSelect = (f: any) => {
     setSelectedFuncionario(f);
-    setScreen('rut');
+    // Ya tenemos el RUT, así que directamente registramos
+    handleSubmit(undefined, f);
   };
 
   const handleKeypad = (val: string) => {
@@ -127,7 +122,7 @@ function TotemInner() {
     return `${body}-${dv}`;
   };
 
-  const handleSubmit = async (overrideCategory?: string) => {
+  const handleSubmit = async (overrideCategory?: string, overrideFuncionario?: any) => {
     const instId = institutionIdRef.current;
     if (!rut || !instId) return;
 
@@ -154,16 +149,17 @@ function TotemInner() {
       const isAppointment = selectedMode === 'appointment';
       
       const finalCategory = overrideCategory || selectedCategory;
+      const finalFunc = overrideFuncionario || selectedFuncionario;
 
       const departamento = selectedMode === 'oirs'
         ? oirsDepartamento
         : selectedMode === 'appointment'
-          ? (selectedFuncionario ? (selectedFuncionario.departamento || 'Hora Agendada') : (finalCategory || 'Hora Agendada'))
+          ? (finalFunc ? (finalFunc.departamento || 'Hora Agendada') : (finalCategory || 'Hora Agendada'))
           : finalCategory;
 
       let letraTicket = departamento.charAt(0).toUpperCase();
-      if (selectedMode === 'appointment' && selectedFuncionario) {
-        letraTicket = selectedFuncionario.letra_atencion || departamento.charAt(0).toUpperCase();
+      if (selectedMode === 'appointment' && finalFunc) {
+        letraTicket = finalFunc.letra_atencion || departamento.charAt(0).toUpperCase();
       }
 
       await runTransaction(db, async (transaction) => {
@@ -199,6 +195,17 @@ function TotemInner() {
         newNumero = currentNumero + 1;
         transaction.update(instRef, { currentTurno: newNumero, ultimo_reinicio: lastReset });
 
+        const departamento = selectedMode === 'oirs'
+          ? oirsDepartamento
+          : selectedMode === 'appointment'
+            ? (finalFunc ? (finalFunc.departamento || 'Hora Agendada') : 'Hora Agendada')
+            : finalCategory;
+
+        let letraTicket = departamento.charAt(0).toUpperCase();
+        if (selectedMode === 'appointment' && finalFunc) {
+          letraTicket = finalFunc.letra_atencion || departamento.charAt(0).toUpperCase();
+        }
+
         transaction.set(turnoRef, {
           institution_id: instId,
           numero: newNumero,
@@ -206,19 +213,28 @@ function TotemInner() {
           departamento_solicitado: departamento,
           rut_usuario: formattedRut,
           estado: 'espera',
-          priority_level: isAppointment ? 1 : 0,
-          is_appointment: isAppointment,
-          funcionario_asignado: selectedFuncionario?.user_id || null,
-          nombre_funcionario_asignado: selectedFuncionario?.nombre || null,
-          created_at: new Date().toISOString(),
+          created_at: now.toISOString(),
+          priority: isAppointment,
+          funcionario_id: isAppointment && finalFunc ? finalFunc.id : null,
+          funcionario_nombre: isAppointment && finalFunc ? finalFunc.nombre : null,
+          llamado_en: null,
+          box: null
         });
+
+        return { newNumero, letraTicket, departamento, isAppointment, finalFunc };
       });
 
-      setTicket({ numero: newNumero, letra_ticket: letraTicket, departamento, priority: isAppointment, funcionario_nombre: selectedFuncionario?.nombre });
+      setTicket({ 
+        numero: result.newNumero, 
+        letra_ticket: result.letraTicket, 
+        departamento: result.departamento, 
+        priority: result.isAppointment,
+        funcionario_nombre: result.finalFunc ? result.finalFunc.nombre : undefined
+      });
       setScreen('ticket');
 
       triggerWebhook('ingreso', {
-        numero: newNumero,
+        numero: result.newNumero,
         rut_usuario: formattedRut,
         institution_id: instId,
         is_appointment: isAppointment,
@@ -319,50 +335,6 @@ function TotemInner() {
     );
   }
 
-  if (screen === 'oirs') {
-    return (
-      <main className={styles.container}>
-        <div className={styles.glassPanel}>
-          <button className={styles.backBtn} onClick={resetFlow}>← Volver</button>
-          <h1 className={styles.title}>Orientación de Trámites</h1>
-          <p className={styles.subtitle}>Ingrese su RUT para registrar su consulta</p>
-
-          <input
-            type="text"
-            className={styles.realInput}
-            value={rut ? formatRutUI(rut) : ''}
-            placeholder="12345678-9"
-            onChange={(e) => {
-              const val = e.target.value.replace(/[^0-9kK]/gi, '');
-              if (val.length <= 10) setRut(val);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && rut.length >= 8 && !loading) handleSubmit();
-            }}
-            autoFocus
-          />
-
-          {errorMsg && <p style={{ color: 'var(--destructive)', fontWeight: 'bold' }}>{errorMsg}</p>}
-
-          <div className={styles.keypad}>
-            {['1','2','3','4','5','6','7','8','9','C','0','k','DEL'].map((key) => (
-              <button
-                key={key}
-                className={`${styles.keyBtn} ${key === 'DEL' ? styles.delBtn : ''} ${key === 'C' ? styles.clearBtn : ''}`}
-                onClick={() => handleKeypad(key)}
-              >
-                {key === 'DEL' ? 'Borrar' : key === 'C' ? 'Limpiar' : key}
-              </button>
-            ))}
-          </div>
-
-          <button className={styles.primaryBtn} onClick={() => handleSubmit()} disabled={rut.length < 8 || loading}>
-            {loading ? 'Generando...' : 'Registrar Consulta'}
-          </button>
-        </div>
-      </main>
-    );
-  }
 
   if (screen === 'appointment') {
     return (
@@ -417,13 +389,15 @@ function TotemInner() {
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && rut.length >= 8 && !loading) {
+              const formattedRut = formatRutUI(rut);
+              if (!validateRUT(formattedRut)) {
+                setErrorMsg('RUT Inválido. Intente nuevamente.');
+                return;
+              }
               if (selectedMode === 'general') {
-                const formattedRut = formatRutUI(rut);
-                if (!validateRUT(formattedRut)) {
-                  setErrorMsg('RUT Inválido. Intente nuevamente.');
-                  return;
-                }
                 setScreen('categories');
+              } else if (selectedMode === 'appointment') {
+                setScreen('appointment');
               } else {
                 handleSubmit();
               }
@@ -447,18 +421,20 @@ function TotemInner() {
         </div>
 
         <button className={styles.primaryBtn} onClick={() => {
+          const formattedRut = formatRutUI(rut);
+          if (!validateRUT(formattedRut)) {
+            setErrorMsg('RUT Inválido. Intente nuevamente.');
+            return;
+          }
           if (selectedMode === 'general') {
-            const formattedRut = formatRutUI(rut);
-            if (!validateRUT(formattedRut)) {
-              setErrorMsg('RUT Inválido. Intente nuevamente.');
-              return;
-            }
             setScreen('categories');
+          } else if (selectedMode === 'appointment') {
+            setScreen('appointment');
           } else {
             handleSubmit();
           }
         }} disabled={rut.length < 8 || loading}>
-          {selectedMode === 'general' ? 'Continuar' : (loading ? 'Generando...' : 'Obtener Turno')}
+          {selectedMode === 'general' || selectedMode === 'appointment' ? 'Continuar' : (loading ? 'Generando...' : 'Obtener Turno')}
         </button>
       </div>
     </main>

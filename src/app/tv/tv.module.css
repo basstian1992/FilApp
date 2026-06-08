@@ -70,7 +70,11 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #020617; /* Deepest slate */
+  background-color: #020617; /* Deepest slate */
+  background-image: var(--tv-bg-image, none);
+  background-size: cover;
+  background-position: center;
+  background-blend-mode: overlay;
   color: #f8fafc;
   font-family: 'Outfit', system-ui, sans-serif;
   overflow: hidden;
@@ -94,7 +98,7 @@
 .logo {
   font-size: 2rem;
   font-weight: 900;
-  background: linear-gradient(to right, #60a5fa, #c084fc);
+  background: linear-gradient(to right, var(--tv-primary, #60a5fa), #c084fc);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: -1px;
@@ -185,7 +189,7 @@
   left: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.15), transparent 60%);
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--tv-primary, #3b82f6) 15%, transparent), transparent 60%);
   pointer-events: none;
   animation: rotateGlow 20s linear infinite;
 }
@@ -298,13 +302,13 @@
 }
 
 .ingresoItem {
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: color-mix(in srgb, var(--tv-primary, #3b82f6) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tv-primary, #3b82f6) 20%, transparent);
   border-radius: 12px;
   padding: 0.5rem 1.25rem;
   font-size: 1.35rem;
   font-weight: 800;
-  color: #93c5fd;
+  color: var(--tv-primary, #93c5fd);
   animation: ingresoSlide 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   white-space: nowrap;
 }
@@ -358,7 +362,7 @@
 .historyItem {
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.03);
-  border-left: 4px solid #3b82f6;
+  border-left: 4px solid var(--tv-primary, #3b82f6);
   border-radius: 16px;
   padding: 1.25rem 1.5rem;
   display: flex;
@@ -383,8 +387,8 @@
 .historyModulo {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #60a5fa;
-  background: rgba(96, 165, 250, 0.1);
+  color: var(--tv-primary, #60a5fa);
+  background: color-mix(in srgb, var(--tv-primary, #3b82f6) 10%, transparent);
   padding: 0.4rem 1rem;
   border-radius: 10px;
 }
@@ -402,7 +406,7 @@
 .footerTicker {
   height: 60px;
   background: #0f172a;
-  border-top: 1px solid rgba(59, 130, 246, 0.2);
+  border-top: 1px solid color-mix(in srgb, var(--tv-primary, #3b82f6) 20%, transparent);
   display: flex;
   align-items: center;
   font-size: 1.5rem;

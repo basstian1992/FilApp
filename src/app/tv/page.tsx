@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useRef } from 'react';
+import { Suspense, useEffect, useState, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { db } from '@/lib/firebase/client';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
@@ -19,6 +19,70 @@ interface Turno {
   created_at?: string;
   called_at?: string;
   institution_id?: string;
+}
+
+/* ─── Premium Voice Engine ─────────────────────────────────────────────── */
+const VOICE_PRIORITY_PATTERNS = [
+  'Microsoft Sabina',
+  'Microsoft Helena',
+  'Microsoft Carolina',
+  'Microsoft Dalia',
+  'Microsoft Pablo',
+  'Microsoft Raul',
+  'Google Español',
+  'Google español',
+  'Google',
+  'Natural',
+  'Premium',
+  'Online',
+  'Multilingual Online',
+];
+
+let _cachedVoices: SpeechSynthesisVoice[] = [];
+let _voiceLoadPromise: Promise<SpeechSynthesisVoice[]> | null = null;
+
+function ensureVoicesLoaded(): Promise<SpeechSynthesisVoice[]> {
+  if (_cachedVoices.length > 0) return Promise.resolve(_cachedVoices);
+  if (_voiceLoadPromise) return _voiceLoadPromise;
+
+  _voiceLoadPromise = new Promise((resolve) => {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      _cachedVoices = voices;
+      resolve(voices);
+      return;
+    }
+    window.speechSynthesis.onvoiceschanged = () => {
+      const v = window.speechSynthesis.getVoices();
+      _cachedVoices = v;
+      resolve(v);
+    };
+    setTimeout(() => {
+      if (_cachedVoices.length === 0) {
+        _cachedVoices = window.speechSynthesis.getVoices();
+        resolve(_cachedVoices);
+      }
+    }, 1000);
+  });
+
+  return _voiceLoadPromise;
+}
+
+function selectBestSpanishVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  const spanish = voices.filter(v => v.lang.startsWith('es'));
+  if (spanish.length === 0) return null;
+
+  for (const pattern of VOICE_PRIORITY_PATTERNS) {
+    const found = spanish.find(v => v.name.includes(pattern));
+    if (found) return found;
+  }
+
+  const latam = spanish.filter(v =>
+    /es-(CL|MX|AR|CO|PE|419|US)/.test(v.lang)
+  );
+  if (latam.length > 0) return latam[0];
+
+  return spanish[0];
 }
 
 function TVInner() {
@@ -44,14 +108,11 @@ function TVInner() {
   const audioEnabledRef = useRef(isAudioEnabled);
   const isFirstLoadLlamado = useRef(true);
   const isFirstLoadEspera = useRef(true);
+  const voicesReadyRef = useRef(false);
   useEffect(() => { audioEnabledRef.current = isAudioEnabled; }, [isAudioEnabled]);
 
-  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
-
   useEffect(() => {
-    const loadVoices = () => { voicesRef.current = window.speechSynthesis.getVoices(); };
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
+    ensureVoicesLoaded().then(() => { voicesReadyRef.current = true; });
   }, []);
 
   useEffect(() => {
@@ -64,52 +125,37 @@ function TVInner() {
     return () => clearInterval(interval);
   }, []);
 
-  const speak = (texto: string) => {
-    if (!isAudioEnabled || !window.speechSynthesis) return;
-    
-    // Si las voces no han cargado aún, intentamos cargarlas forzosamente
-    if (voicesRef.current.length === 0) {
-      voicesRef.current = window.speechSynthesis.getVoices();
-    }
+  const speak = useCallback((texto: string) => {
+    if (!audioEnabledRef.current || !window.speechSynthesis) return;
 
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(texto);
-    
-    // Evitar garbage collection bug en Chrome
-    (window as any).lastUtterance = utterance;
 
-    const spanishVoices = voicesRef.current.filter(v => v.lang.includes('es'));
-    let bestVoice = spanishVoices.find(v => 
-      v.name.includes('Natural') || 
-      v.name.includes('Online') || 
-      v.name.includes('Google') || 
-      v.name.includes('Premium') ||
-      v.name.includes('Multilingual Online')
-    );
-    
-    if (!bestVoice) {
-      bestVoice = spanishVoices.find(v => v.lang.includes('es-CL') || v.lang.includes('es-419') || v.lang.includes('es-MX') || v.lang.includes('es-US'));
-    }
-    if (!bestVoice && spanishVoices.length > 0) {
-      bestVoice = spanishVoices[0];
-    }
+    const utterance = new SpeechSynthesisUtterance(texto);
+    (window as any).__filapp_utterance = utterance;
+
+    const voices = window.speechSynthesis.getVoices();
+    const bestVoice = selectBestSpanishVoice(voices);
 
     if (bestVoice) {
       utterance.voice = bestVoice;
       utterance.lang = bestVoice.lang;
     } else {
-      utterance.lang = 'es-ES'; // fallback generico seguro
+      utterance.lang = 'es-CL';
     }
-    
-    // Ajustes para que suene un poco más fluida y natural
-    utterance.rate = 0.9; // Ligeramente más pausado
-    utterance.pitch = 1.0; // Tono neutro
 
-    // En Chrome a veces se necesita un pequeño delay
-    setTimeout(() => {
-      window.speechSynthesis.speak(utterance);
-    }, 50);
-  };
+    const wordCount = texto.split(/\s+/).length;
+    if (wordCount > 20) {
+      utterance.rate = 0.95;
+    } else if (wordCount > 8) {
+      utterance.rate = 0.9;
+    } else {
+      utterance.rate = 0.85;
+    }
+    utterance.pitch = 1.0;
+    utterance.volume = 1;
+
+    window.speechSynthesis.speak(utterance);
+  }, []);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -149,13 +195,12 @@ function TVInner() {
         snapshot.docChanges().forEach(change => {
           if ((change.type === 'added' || change.type === 'modified') && change.doc.data().estado === 'llamado') {
             const t = change.doc.data() as Turno;
-            const depStr = t.departamento ? `de ${t.departamento}` : '';
-            const funcStr = t.nombre_funcionario || 'Funcionario';
-            const ticketStr = t.letra_ticket ? `${t.letra_ticket} ` : '';
             const textToSpeak = `Siguiente turno, ${t.letra_ticket ? 'letra ' + t.letra_ticket + ', ' : ''}número ${t.numero}. Dirigirse al módulo ${t.letra_especialista}.`;
             if (audioEnabledRef.current) {
               const ding = new Audio('/ding.mp3');
-              ding.play().then(() => setTimeout(() => speak(textToSpeak), 1200)).catch(() => speak(textToSpeak));
+              ding.play().then(() => {
+                setTimeout(() => speak(textToSpeak), 800);
+              }).catch(() => speak(textToSpeak));
             }
           }
         });
@@ -303,8 +348,9 @@ function TVInner() {
       </div>
 
       <footer className={styles.footerTicker}>
-        {/* @ts-expect-error */}
-        <marquee>{mensajeDia}</marquee>
+        <div className={styles.tickerTrack}>
+          <span className={styles.tickerText}>{mensajeDia}</span>
+        </div>
       </footer>
     </main>
   );

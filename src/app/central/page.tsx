@@ -21,6 +21,21 @@ export default function CentralPage() {
   const [nombre, setNombre] = useState('');
   const [actionMessage, setActionMessage] = useState({ text: '', type: '' });
 
+  const validateRUT = (rut: string) => {
+    if (!/^[0-9]+[-|‐]{1}[0-9kK]{1}$/.test(rut)) return false;
+    const tmp = rut.split('-');
+    let digv = tmp[1].toLowerCase();
+    const rutNum = tmp[0];
+    if (digv === 'k') digv = 'k';
+    let M = 0, S = 1;
+    let num = parseInt(rutNum, 10);
+    for (; num; num = Math.floor(num / 10)) {
+      S = (S + num % 10 * (9 - M++ % 6)) % 11;
+    }
+    const expectedDv = S ? (S - 1).toString() : 'k';
+    return expectedDv === digv;
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setSession(user);
@@ -67,10 +82,12 @@ export default function CentralPage() {
     await signOut(auth);
   };
 
-  const showMessage = (text: string, type: 'success' | 'error') => {
+  const showMessage = (text: string, type: 'success' | 'error' | 'warning') => {
     setActionMessage({ text, type });
-    setTimeout(() => setActionMessage({ text: '', type: '' }), 4000);
+    setTimeout(() => setActionMessage({ text: '', type: '' }), 5000);
   };
+
+  const cleanRutInput = (raw: string) => raw.replace(/[^0-9kK]/gi, '').slice(0, 10);
 
   const formatRutUI = (raw: string) => {
     const clean = raw.replace(/[^0-9kK]/g, '');
@@ -95,9 +112,12 @@ export default function CentralPage() {
       showMessage('Debe ingresar un RUT', 'error');
       return;
     }
+    const formattedRut = formatRutUI(rut);
+    if (!validateRUT(formattedRut)) {
+      showMessage('⚠️ El RUT ingresado no corresponde a un formato chileno válido. Puede continuar si es un documento extranjero.', 'warning');
+    }
     setLoading(true);
     try {
-      const formattedRut = formatRutUI(rut);
       await upsertUser(formattedRut, nombre);
 
       const instRef = doc(db, 'institutions', institutionId);
@@ -165,9 +185,12 @@ export default function CentralPage() {
       showMessage('Debe ingresar un RUT para registro de orientación', 'error');
       return;
     }
+    const formattedRut = formatRutUI(rut);
+    if (!validateRUT(formattedRut)) {
+      showMessage('⚠️ El RUT ingresado no corresponde a un formato chileno válido. Puede continuar si es un documento extranjero.', 'warning');
+    }
     setLoading(true);
     try {
-      const formattedRut = formatRutUI(rut);
       await upsertUser(formattedRut, nombre);
 
       const now = new Date().toISOString();
@@ -243,21 +266,25 @@ export default function CentralPage() {
           <p className={styles.subtitle}>Ingrese los datos del usuario si el Tótem no está disponible o requiere orientación directa.</p>
 
           {actionMessage.text && (
-            <div className={actionMessage.type === 'success' ? styles.successAlert : styles.errorAlert}>
+            <div className={
+              actionMessage.type === 'success' ? styles.successAlert :
+              actionMessage.type === 'warning' ? styles.warningAlert :
+              styles.errorAlert
+            }>
               {actionMessage.text}
             </div>
           )}
 
           <div className={styles.formGrid}>
             <div className={styles.inputGroup}>
-              <label>RUT del Paciente / Usuario</label>
-              <input
-                type="text"
-                placeholder="Ej: 12345678-9"
-                value={rut}
-                onChange={e => setRut(e.target.value)}
-                autoFocus
-              />
+                <label>RUT del Paciente / Usuario</label>
+                <input
+                  type="text"
+                  placeholder="Ej: 12345678-9"
+                  value={rut ? formatRutUI(rut) : ''}
+                  onChange={e => setRut(cleanRutInput(e.target.value))}
+                  autoFocus
+                />
             </div>
             <div className={styles.inputGroup}>
               <label>Nombre Completo (Opcional)</label>

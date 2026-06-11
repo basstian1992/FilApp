@@ -18,7 +18,7 @@ import {
   Settings, BarChart3, Users, Clock, AlertTriangle,
   Download, LogOut, Building2, UserPlus, ArrowLeft, Plus,
   Link2, Eye, Shield, UserCog, ChevronRight, Monitor,
-  Tablet, LayoutDashboard, FileText, Upload
+  Tablet, LayoutDashboard, FileText, Upload, PlusCircle
 } from 'lucide-react';
 import UserDirectory from '@/components/UserDirectory';
 
@@ -47,12 +47,12 @@ function exportToCSV(filename: string, rows: any[]) {
 async function createUserSecondary(email: string, password: string) {
   const SECONDARY = 'filapp-secondary';
   const firebaseConfig = {
-    apiKey: 'AIzaSyDFIOBb_k-WbutDSXyrcz4-MhEiZx0pmUE',
-    authDomain: 'filapp-f5682.firebaseapp.com',
-    projectId: 'filapp-f5682',
-    storageBucket: 'filapp-f5682.firebasestorage.app',
-    messagingSenderId: '913826262699',
-    appId: '1:913826262699:web:35c51f954bf801c65bd1ee',
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyDFIOBb_k-WbutDSXyrcz4-MhEiZx0pmUE',
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'filapp-f5682.firebaseapp.com',
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'filapp-f5682',
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'filapp-f5682.firebasestorage.app',
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '913826262699',
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '1:913826262699:web:35c51f954bf801c65bd1ee',
   };
   const secondaryApp = getApps().find(a => a.name === SECONDARY)
     || initializeApp(firebaseConfig, SECONDARY);

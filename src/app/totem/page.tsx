@@ -23,7 +23,7 @@ function validateRUT(rut: string) {
   return expectedDv === digv;
 }
 
-type Screen = 'menu' | 'categories' | 'oirs' | 'appointment' | 'rut' | 'ticket';
+type Screen = 'menu' | 'categories' | 'oirs' | 'appointment' | 'rut' | 'ticket' | 'appointment_funcionario_select';
 
 function TotemInner() {
   const searchParams = useSearchParams();
@@ -38,6 +38,7 @@ function TotemInner() {
   const [loading, setLoading] = useState(false);
   const [ticket, setTicket] = useState<{ numero: number; letra_ticket: string; departamento: string; priority: boolean; funcionario_nombre?: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [warningMsg, setWarningMsg] = useState('');
 
   const [categories, setCategories] = useState<string[]>([]);
   const [funcionarios, setFuncionarios] = useState<any[]>([]);
@@ -86,6 +87,7 @@ function TotemInner() {
     setRut('');
     setTicket(null);
     setErrorMsg('');
+    setWarningMsg('');
   };
 
   const handleModeSelect = (mode: 'general' | 'oirs' | 'appointment') => {
@@ -142,8 +144,9 @@ function TotemInner() {
 
     const formattedRut = formatRutUI(rut);
     if (!validateRUT(formattedRut)) {
-      setErrorMsg('RUT Inválido. Intente nuevamente.');
-      return;
+      setWarningMsg('⚠️ El RUT ingresado no corresponde a un formato chileno válido. Puede continuar si es un documento extranjero.');
+    } else {
+      setWarningMsg('');
     }
 
     setLoading(true);
@@ -432,8 +435,7 @@ function TotemInner() {
             if (e.key === 'Enter' && rut.length >= 8 && !loading) {
               const formattedRut = formatRutUI(rut);
               if (!validateRUT(formattedRut)) {
-                setErrorMsg('RUT Inválido. Intente nuevamente.');
-                return;
+                setWarningMsg('⚠️ El RUT ingresado no corresponde a un formato chileno válido. Puede continuar si es un documento extranjero.');
               }
               if (selectedMode === 'general') {
                 setScreen('categories');
@@ -448,6 +450,7 @@ function TotemInner() {
         />
 
         {errorMsg && <p style={{ color: 'var(--destructive)', fontWeight: 'bold' }}>{errorMsg}</p>}
+        {warningMsg && !errorMsg && <p style={{ color: 'var(--accent)', fontWeight: 600, background: 'rgba(245, 158, 11, 0.1)', padding: '0.6rem 1rem', borderRadius: '8px', fontSize: '0.85rem' }}>{warningMsg}</p>}
 
         <div className={styles.keypad}>
           {['1','2','3','4','5','6','7','8','9','C','0','k','DEL'].map((key) => (
@@ -464,8 +467,7 @@ function TotemInner() {
         <button className={styles.primaryBtn} onClick={() => {
           const formattedRut = formatRutUI(rut);
           if (!validateRUT(formattedRut)) {
-            setErrorMsg('RUT Inválido. Intente nuevamente.');
-            return;
+            setWarningMsg('⚠️ El RUT ingresado no corresponde a un formato chileno válido. Puede continuar si es un documento extranjero.');
           }
           if (selectedMode === 'general') {
             setScreen('categories');

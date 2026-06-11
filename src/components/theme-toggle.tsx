@@ -2,10 +2,14 @@
 
 import * as React from "react";
 import { useTheme } from "next-themes";
+import { usePathname } from "next/navigation";
 import { Moon, Sun } from "lucide-react";
 import styles from "./theme-toggle.module.css";
 
+const HIDDEN_PATHS = ['/tv'];
+
 export function ThemeToggle() {
+  const pathname = usePathname();
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
 
@@ -15,6 +19,10 @@ export function ThemeToggle() {
 
   if (!mounted) {
     return <div className={styles.toggleBtnPlaceholder} />;
+  }
+
+  if (HIDDEN_PATHS.includes(pathname)) {
+    return null;
   }
 
   const currentTheme = theme === 'system' ? resolvedTheme : theme;

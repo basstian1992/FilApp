@@ -61,6 +61,16 @@
   font-weight: bold;
 }
 
+.warningAlert {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+  padding: var(--spacing-3);
+  border-radius: var(--radius-md);
+  border: 1px solid #d97706;
+  font-size: 1rem;
+  font-weight: bold;
+}
+
 .inputGroup {
   display: flex;
   flex-direction: column;

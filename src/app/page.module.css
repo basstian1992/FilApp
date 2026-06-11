@@ -391,6 +391,7 @@
 /* Right panel */
 .landingActions {
   width: 440px;
+  max-width: 100%;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;

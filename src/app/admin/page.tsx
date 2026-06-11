@@ -244,6 +244,10 @@ export default function AdminPage() {
           mensaje_dia: '',
         }
       });
+      await updateDoc(doc(db, 'especialistas', userProfile.id), {
+        institution_id: ref.id
+      });
+      setUserProfile({ ...userProfile, institution_id: ref.id });
       setNewInstName(''); setShowInstForm(false);
       await loadDashboard(userProfile.user_id, userProfile.role);
       alert(`✅ Institución creada: ${newInstName}\nID: ${ref.id}`);
@@ -355,6 +359,12 @@ export default function AdminPage() {
   const updateFuncionario = async (id: string, field: string, value: string) => {
     await updateDoc(doc(db, 'especialistas', id), { [field]: value });
     setFuncionarios(prev => prev.map(f => f.id === id ? { ...f, [field]: value } : f));
+  };
+
+  const toggleFuncionarioStatus = async (id: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'activo' ? 'inactivo' : 'activo';
+    await updateDoc(doc(db, 'especialistas', id), { estado_funcionario: newStatus });
+    setFuncionarios(prev => prev.map(f => f.id === id ? { ...f, estado_funcionario: newStatus } : f));
   };
 
   /* ── Export helpers ────────────────────────────────────────────────────────── */
@@ -897,7 +907,7 @@ export default function AdminPage() {
                       </div>
                       <div className={styles.tableWrap}>
                         <table className={styles.table}>
-                          <thead><tr><th>Perfil</th><th>Nombre</th><th>Cargo</th><th>Módulo</th><th>Estado</th></tr></thead>
+                          <thead><tr><th>Perfil</th><th>Nombre</th><th>Cargo</th><th>Módulo</th><th>Estado</th><th>Acción</th></tr></thead>
                           <tbody>
                             {funcs.map(f => (
                               <tr key={f.id}>
@@ -913,9 +923,19 @@ export default function AdminPage() {
                                 <td><input className={styles.tableInput} value={f.cargo || ''} onChange={e => updateFuncionario(f.id, 'cargo', e.target.value)} /></td>
                                 <td><input className={styles.tableInput} value={f.letra_atencion || ''} onChange={e => updateFuncionario(f.id, 'letra_atencion', e.target.value)} /></td>
                                 <td><span className={styles.chip} data-role={f.estado_funcionario === 'activo' ? 'admin' : 'funcionario'}>{f.estado_funcionario || 'inactivo'}</span></td>
+                                <td>
+                                  <button
+                                    className={f.estado_funcionario === 'activo' ? styles.btnAmber : styles.btnGreen}
+                                    onClick={() => toggleFuncionarioStatus(f.id, f.estado_funcionario || 'inactivo')}
+                                    style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem' }}
+                                    title={f.estado_funcionario === 'activo' ? 'Desactivar' : 'Activar'}
+                                  >
+                                    {f.estado_funcionario === 'activo' ? 'Desactivar' : 'Activar'}
+                                  </button>
+                                </td>
                               </tr>
                             ))}
-                            {funcs.length === 0 && <tr><td colSpan={5} className={styles.noData}>Sin funcionarios.</td></tr>}
+                            {funcs.length === 0 && <tr><td colSpan={6} className={styles.noData}>Sin funcionarios.</td></tr>}
                           </tbody>
                         </table>
                       </div>

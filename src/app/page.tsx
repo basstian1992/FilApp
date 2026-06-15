@@ -122,18 +122,6 @@ export default function LandingPage() {
     setInstitutionName('');
   };
 
-  if (loading) {
-    return (
-      <div className={styles.loadingScreen}>
-        <div className={styles.loadingSpinner}>
-          <div className={styles.spinnerRing} />
-          <div className={styles.spinnerDot} />
-        </div>
-        <p className={styles.loadingText}>FilApp OS</p>
-      </div>
-    );
-  }
-
   /* ─── Real-time watcher: auto-redirect when pending user gets approved ──── */
   useEffect(() => {
     if (!session?.uid || !userProfile?._isPending) return;
@@ -154,6 +142,18 @@ export default function LandingPage() {
     });
     return () => unsub();
   }, [session?.uid, userProfile?._isPending]);
+
+  if (loading) {
+    return (
+      <div className={styles.loadingScreen}>
+        <div className={styles.loadingSpinner}>
+          <div className={styles.spinnerRing} />
+          <div className={styles.spinnerDot} />
+        </div>
+        <p className={styles.loadingText}>FilApp OS</p>
+      </div>
+    );
+  }
 
   /* ─── Pending account screen ────────────────────────────────────────────── */
   if (session && userProfile?._isPending) {

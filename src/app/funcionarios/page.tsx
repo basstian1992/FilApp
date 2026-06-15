@@ -101,22 +101,30 @@ export default function StaffPage() {
   const isFirstEspera = useRef(true);
   const isFirstLoad = useRef(true);
   const socketRef = useRef<any>(null);
+  // onSnapshot unsubscribe handles (to avoid memory leaks)
+  const unsubProfileRef = useRef<(() => void) | null>(null);
+  const unsubQueueRef   = useRef<(() => void) | null>(null);
+  const unsubActivoRef  = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     funcionarioRef.current = funcionario;
   }, [funcionario]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
       if (!user) {
-        // Not logged in → redirect to landing
         router.replace('/');
         return;
       }
       setSession(user);
       fetchFuncionarioData(user.uid);
     });
-    return () => unsubscribe();
+    return () => {
+      unsubAuth();
+      unsubProfileRef.current?.();
+      unsubQueueRef.current?.();
+      unsubActivoRef.current?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -161,19 +169,18 @@ export default function StaffPage() {
   const fetchFuncionarioData = async (userId: string) => {
     try {
       const q = query(collection(db, 'especialistas'), where('user_id', '==', userId));
-      onSnapshot(q, async (querySnapshot) => {
+      unsubProfileRef.current = onSnapshot(q, async (querySnapshot) => {
         if (!querySnapshot.empty) {
           const specDoc = querySnapshot.docs[0];
           const specData = { id: specDoc.id, ...specDoc.data() } as Funcionario;
 
-          // Block non-funcionarios — redirect to /admin
+          // Block non-funcionarios — redirect to /admin (NO signOut, they may be valid admin)
           if (specData.role && specData.role !== 'funcionario') {
-            await signOut(auth);
             router.replace('/admin');
             return;
           }
 
-          // Block pending funcionarios — redirect to landing with pending screen
+          // Block pending funcionarios — redirect to landing pending screen
           if ((specData as any).estado_funcionario === 'pendiente') {
             router.replace('/');
             return;
@@ -186,7 +193,7 @@ export default function StaffPage() {
           if (isFirstLoad.current) {
             isFirstLoad.current = false;
             await updateDoc(doc(db, 'especialistas', specData.id), { estado_funcionario: 'activo' });
-            refreshQueue(specData.id);
+            refreshQueue(specData.id, specData.institution_id);
             if (specData.institution_id && specData.user_id) {
               connectSocket(specData.institution_id, specData.user_id);
             }
@@ -204,9 +211,13 @@ export default function StaffPage() {
     }
   };
 
-  const refreshQueue = async (specId: string) => {
-    const qEspera = query(collection(db, 'turnos'), where('estado', '==', 'espera'));
-    onSnapshot(qEspera, (snap) => {
+  const refreshQueue = async (specId: string, institutionId: string) => {
+    const qEspera = query(
+      collection(db, 'turnos'),
+      where('estado', '==', 'espera'),
+      where('institution_id', '==', institutionId)
+    );
+    unsubQueueRef.current = onSnapshot(qEspera, (snap) => {
       const currentFunc = funcionarioRef.current;
       const allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
 
@@ -252,7 +263,7 @@ export default function StaffPage() {
     });
 
     const qActivo = query(collection(db, 'turnos'), where('especialista_id', '==', specId));
-    onSnapshot(qActivo, async (snap) => {
+    unsubActivoRef.current = onSnapshot(qActivo, async (snap) => {
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Turno));
       const activo = docs.find(d => d.estado === 'llamado');
 
@@ -498,7 +509,11 @@ export default function StaffPage() {
       return;
     }
 
-    const qNext = query(collection(db, 'turnos'), where('estado', '==', 'espera'));
+    const qNext = query(
+      collection(db, 'turnos'),
+      where('estado', '==', 'espera'),
+      where('institution_id', '==', funcionario.institution_id)
+    );
     const nextSnap = await getDocs(qNext);
 
     const docsList = nextSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));

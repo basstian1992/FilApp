@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { db, auth } from '@/lib/firebase/client';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, getDocs, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import styles from './page.module.css';
 import {
   Building2, LogOut, Users, MonitorPlay, Settings, ArrowRight,
@@ -133,6 +133,27 @@ export default function LandingPage() {
       </div>
     );
   }
+
+  /* ─── Real-time watcher: auto-redirect when pending user gets approved ──── */
+  useEffect(() => {
+    if (!session?.uid || !userProfile?._isPending) return;
+    const q = query(collection(db, 'especialistas'), where('user_id', '==', session.uid));
+    const unsub = onSnapshot(q, async (snap) => {
+      if (snap.empty) return;
+      const data = snap.docs[0].data() as any;
+      if (data.estado_funcionario !== 'pendiente') {
+        // Approved! Update profile and redirect
+        setUserProfile(data);
+        if (data.institution_id) {
+          const instSnap = await getDoc(doc(db, 'institutions', data.institution_id));
+          if (instSnap.exists()) setInstitutionName(instSnap.data().name || '');
+        }
+        if (data.role === 'funcionario') router.push('/funcionarios');
+        else if (data.role === 'admin' || data.role === 'gerente') router.push('/admin');
+      }
+    });
+    return () => unsub();
+  }, [session?.uid, userProfile?._isPending]);
 
   /* ─── Pending account screen ────────────────────────────────────────────── */
   if (session && userProfile?._isPending) {

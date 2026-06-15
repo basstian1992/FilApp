@@ -114,6 +114,7 @@ export default function AdminPage() {
   const [funcDepto, setFuncDepto] = useState('');
   const [funcCargo, setFuncCargo] = useState('');
   const [funcLetra, setFuncLetra] = useState('');
+  const [funcInstId, setFuncInstId] = useState(''); // institution to assign to new admin
   const [funcMsg, setFuncMsg] = useState('');
   const [funcLoading, setFuncLoading] = useState(false);
 
@@ -164,11 +165,14 @@ export default function AdminPage() {
     setPendingFuncionarios(staff.filter((f: any) => f.estado_funcionario === 'pendiente'));
   };
 
-  // Live stats
+  // Live stats — scoped to current institution only
   useEffect(() => {
     if (!institutionId) return;
     fetchStats();
-    const unsub = onSnapshot(collection(db, 'turnos'), () => fetchStats());
+    const unsub = onSnapshot(
+      query(collection(db, 'turnos'), where('institution_id', '==', institutionId)),
+      () => fetchStats()
+    );
     return () => unsub();
   }, [institutionId]);
 
@@ -195,11 +199,13 @@ export default function AdminPage() {
     e.preventDefault();
     if (!newInstName.trim() || !userProfile) return;
     setInstSaving(true);
+    const isGte = userProfile.role === 'gerente';
     try {
       const ref = await addDoc(collection(db, 'institutions'), {
         name: newInstName.trim(),
-        owner_id: userProfile.user_id,
-        owner_email: session.email,
+        // Gerente creates unowned institutions; only admins own institutions
+        owner_id: isGte ? '' : userProfile.user_id,
+        owner_email: isGte ? '' : session.email,
         created_at: new Date().toISOString(),
         currentTurno: 0,
         estado: 'activa',
@@ -210,8 +216,11 @@ export default function AdminPage() {
           mensaje_dia: '',
         }
       });
-      await updateDoc(doc(db, 'especialistas', userProfile.id), { institution_id: ref.id });
-      setUserProfile({ ...userProfile, institution_id: ref.id });
+      // Only update the admin's own profile, never the gerente's
+      if (!isGte) {
+        await updateDoc(doc(db, 'especialistas', userProfile.id), { institution_id: ref.id });
+        setUserProfile({ ...userProfile, institution_id: ref.id });
+      }
       setNewInstName(''); setShowInstForm(false);
       await loadDashboard(userProfile.user_id, userProfile.role);
     } catch { alert('Error al crear institución'); }
@@ -326,22 +335,31 @@ export default function AdminPage() {
     setFuncLoading(true); setFuncMsg('');
     try {
       const newUid = await createUserSecondary(funcEmail, funcPass);
+      const assignedInstId = role === 'funcionario' ? (institutionId || '') : (funcInstId || '');
       await setDoc(doc(db, 'especialistas', newUid), {
         user_id: newUid,
-        institution_id: role === 'funcionario' ? (institutionId || '') : '',
+        institution_id: assignedInstId,
         role,
         nombre: funcNombre || (role === 'admin' ? 'Administrador' : 'Funcionario'),
         departamento: role === 'funcionario' ? funcDepto : 'Administración',
         cargo: funcCargo || (role === 'admin' ? 'Administrador' : 'Funcionario'),
-        estado_funcionario: 'inactivo',
+        estado_funcionario: 'activo', // admins start active; funcionarios start active when directly registered
         avatar_url: '',
         letra_atencion: funcLetra || funcEmail.split('@')[0].substring(0, 2).toUpperCase(),
         whatsapp_phone: '',
         whatsapp_apikey: '',
         email: funcEmail,
       });
+      // If gerente assigned an institution to the new admin, also link admin as owner
+      if (role === 'admin' && funcInstId) {
+        await updateDoc(doc(db, 'institutions', funcInstId), {
+          owner_id: newUid,
+          owner_email: funcEmail,
+        });
+      }
       setFuncMsg(`✅ ${role === 'admin' ? 'Administrador' : 'Funcionario'} "${funcNombre}" registrado.`);
-      setFuncEmail(''); setFuncPass(''); setFuncNombre(''); setFuncDepto(''); setFuncCargo(''); setFuncLetra('');
+      setFuncEmail(''); setFuncPass(''); setFuncNombre(''); setFuncDepto('');
+      setFuncCargo(''); setFuncLetra(''); setFuncInstId('');
       if (role === 'funcionario' && institutionId) await loadFuncionarios(institutionId);
       else await loadDashboard(userProfile.user_id, userProfile.role);
     } catch (err: any) {
@@ -598,6 +616,13 @@ export default function AdminPage() {
                       <div className={styles.formGroup}>
                         <label>Contraseña Temporal</label>
                         <input type="password" value={funcPass} onChange={e => setFuncPass(e.target.value)} minLength={6} required />
+                      </div>
+                      <div className={styles.formGroup}>
+                        <label>Asignar Institución (opcional)</label>
+                        <select value={funcInstId} onChange={e => setFuncInstId(e.target.value)} className={styles.selectField}>
+                          <option value="">Sin institución asignada</option>
+                          {institutions.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                        </select>
                       </div>
                     </div>
                     <button type="submit" className={styles.btnPrimary} disabled={funcLoading}>

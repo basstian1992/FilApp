@@ -117,6 +117,7 @@ export default function AdminPage() {
   const [funcInstId, setFuncInstId] = useState(''); // institution to assign to new admin
   const [funcMsg, setFuncMsg] = useState('');
   const [funcLoading, setFuncLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   /* ── Auth effect ─────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -435,6 +436,47 @@ export default function AdminPage() {
     exportToCSV(`bd_${inst.name}.csv`, snap.docs.map(d => ({ RUT: d.id, ...d.data() })));
   };
 
+  const handleSystemReset = async () => {
+    if (userProfile?.role !== 'gerente') return;
+    const step1 = confirm(
+      '⚠️ RESET TOTAL DEL SISTEMA\n\n' +
+      'Esto eliminará PERMANENTEMENTE:\n' +
+      '• Todas las instituciones\n' +
+      '• Todos los administradores y funcionarios (excepto tu cuenta de gerente)\n' +
+      '• Todos los usuarios atendidos\n' +
+      '• Todo el historial de turnos\n\n' +
+      'Las cuentas de inicio de sesión (Authentication) NO se eliminan aquí.\n\n' +
+      '¿Deseas continuar?'
+    );
+    if (!step1) return;
+    const phrase = prompt('Para confirmar, escribe exactamente:  BORRAR TODO');
+    if (phrase !== 'BORRAR TODO') { alert('Cancelado. Texto no coincide.'); return; }
+
+    setResetting(true);
+    try {
+      const myUid = userProfile.user_id;
+      const collections = ['turnos', 'usuarios', 'institutions'];
+      for (const col of collections) {
+        const snap = await getDocs(collection(db, col));
+        await Promise.all(snap.docs.map(d => deleteDoc(doc(db, col, d.id))));
+      }
+      // Delete all especialistas except the current gerente
+      const espSnap = await getDocs(collection(db, 'especialistas'));
+      await Promise.all(
+        espSnap.docs
+          .filter(d => (d.data() as any).user_id !== myUid)
+          .map(d => deleteDoc(doc(db, 'especialistas', d.id)))
+      );
+      // Reset gerente's own institution link
+      await updateDoc(doc(db, 'especialistas', userProfile.id), { institution_id: '' });
+      setInstitutions([]); setAllAdmins([]); setFuncionarios([]); setPendingFuncionarios([]);
+      alert('✅ Sistema reiniciado. Recuerda eliminar las cuentas antiguas en Firebase Authentication si deseas reutilizar esos correos.');
+    } catch (err: any) {
+      alert('Error durante el reset: ' + err.message);
+    }
+    setResetting(false);
+  };
+
   /* ── Render ─────────────────────────────────────────────────────────────────── */
   if (loading) {
     return (
@@ -707,6 +749,21 @@ export default function AdminPage() {
                       {institutions.length === 0 && <p className={styles.noData}>Sin instituciones.</p>}
                     </div>
                   </div>
+                </div>
+
+                {/* Danger zone — system reset */}
+                <div className={styles.dangerZone} style={{ marginTop: '1.75rem' }}>
+                  <div className={styles.dangerInfo}>
+                    <h3><AlertTriangle size={18} /> Reset Total del Sistema</h3>
+                    <p>
+                      Elimina <strong>todas</strong> las instituciones, administradores, funcionarios,
+                      usuarios y turnos para empezar desde cero. Tu cuenta de gerente se conserva.
+                      Las cuentas de Authentication deben eliminarse aparte en Firebase Console.
+                    </p>
+                  </div>
+                  <button onClick={handleSystemReset} className={styles.btnDanger} disabled={resetting}>
+                    {resetting ? 'Borrando…' : <><Trash2 size={15} /> Borrar Todo</>}
+                  </button>
                 </div>
               </div>
             )}

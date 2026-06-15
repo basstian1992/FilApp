@@ -69,7 +69,12 @@ function TotemInner() {
           where('institution_id', '==', institutionId),
           where('role', '==', 'funcionario')
         ));
-        setFuncionarios(funcSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        // Only show approved (non-pending) funcionarios for appointment selection
+        setFuncionarios(
+          funcSnap.docs
+            .map(d => ({ id: d.id, ...d.data() } as any))
+            .filter(f => f.estado_funcionario !== 'pendiente')
+        );
       } catch (e) {
         console.error(e);
         setCategories(['Atención General']);

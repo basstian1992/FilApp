@@ -65,10 +65,11 @@ export default function LandingPage() {
         if (!snap.empty) {
           const data = snap.docs[0].data() as any;
 
+          // Block pending users — show a waiting screen instead of auto-approving
           if (data.estado_funcionario === 'pendiente') {
-            // Auto-approve users in development instead of locking them out
-            await updateDoc(doc(db, 'especialistas', snap.docs[0].id), { estado_funcionario: 'activo' });
-            data.estado_funcionario = 'activo';
+            setUserProfile({ ...data, _isPending: true });
+            setLoading(false);
+            return;
           }
 
           setUserProfile(data);
@@ -130,6 +131,31 @@ export default function LandingPage() {
         </div>
         <p className={styles.loadingText}>FilApp OS</p>
       </div>
+    );
+  }
+
+  /* ─── Pending account screen ────────────────────────────────────────────── */
+  if (session && userProfile?._isPending) {
+    return (
+      <main className={styles.container}>
+        <div className={styles.landingSplit} style={{ justifyContent: 'center' }}>
+          <div className={styles.landingActions} style={{ borderLeft: 'none', maxWidth: '480px', margin: '0 auto' }}>
+            <div className={styles.actionCard} style={{ textAlign: 'center', padding: '2.5rem 2rem' }}>
+              <div style={{ fontSize: '3rem', lineHeight: 1, marginBottom: '1rem' }}>⏳</div>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.75rem' }}>
+                Cuenta Pendiente
+              </h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+                Tu solicitud de acceso está siendo revisada por el administrador de tu institución.
+                Una vez aprobada, podrás ingresar al sistema.
+              </p>
+              <button onClick={handleLogout} className={styles.primaryBtn} style={{ width: '100%', justifyContent: 'center' }}>
+                <LogOut size={15} /> Cerrar Sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
     );
   }
 

@@ -1034,6 +1034,102 @@
   letter-spacing: 0.3px;
 }
 
+/* ── Gerente Tabs ────────────────────────────────────────── */
+.gerenteTabNav {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 0;
+  margin-bottom: 1.75rem;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+}
+
+.gerenteTab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.gerenteTab:hover { color: var(--primary); background: var(--surface-hover); }
+
+.gerenteTabActive {
+  color: var(--primary) !important;
+  border-bottom-color: var(--primary) !important;
+  background: transparent !important;
+}
+
+.gerenteTabBadge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  padding: 1px 7px;
+  border-radius: 10px;
+  min-width: 22px;
+  text-align: center;
+}
+
+/* ── Tab Badge (for pending count) ───────────────────────── */
+.tabBadge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  background: var(--accent);
+  color: white;
+  padding: 1px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ── Pending Section ─────────────────────────────────────── */
+.pendingSection {
+  background: rgba(245, 158, 11, 0.05);
+  border: 1.5px solid rgba(245, 158, 11, 0.3);
+  border-radius: var(--radius-xl);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.pendingSectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  color: var(--accent);
+}
+
+.pendingSectionHeader h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* ── Institution card admin line ─────────────────────────── */
+.instCardAdmin {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  margin: 0.1rem 0 0.1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 768px) {
   .instHeader { flex-direction: column; align-items: flex-start; }

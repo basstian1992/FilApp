@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { db, auth } from '@/lib/firebase/client';
 import {
@@ -11,14 +11,14 @@ import { getAuth as _getAuth } from 'firebase/auth';
 import { initializeApp, getApps } from 'firebase/app';
 import {
   collection, query, where, getDocs, doc, setDoc,
-  onSnapshot, updateDoc, orderBy, addDoc, getDoc
+  onSnapshot, updateDoc, orderBy, addDoc, getDoc, deleteDoc
 } from 'firebase/firestore';
 import styles from './admin.module.css';
 import {
   Settings, BarChart3, Users, Clock, AlertTriangle,
   Download, LogOut, Building2, UserPlus, ArrowLeft, Plus,
   Link2, Eye, Shield, UserCog, ChevronRight, Monitor,
-  Tablet, LayoutDashboard, FileText, Upload, PlusCircle
+  Tablet, LayoutDashboard, FileText, PlusCircle, Trash2, CheckCircle
 } from 'lucide-react';
 import UserDirectory from '@/components/UserDirectory';
 
@@ -65,6 +65,7 @@ async function createUserSecondary(email: string, password: string) {
 
 /* ─── Types ─────────────────────────────────────────────────────────────────── */
 type AdminTab = 'dashboard' | 'config' | 'funcionarios' | 'directorio' | 'reportes';
+type GerenteTab = 'instituciones' | 'administradores' | 'reportes';
 
 /* ─── Component ──────────────────────────────────────────────────────────────── */
 export default function AdminPage() {
@@ -75,15 +76,16 @@ export default function AdminPage() {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // View — Gerente uses 'dashboard' to see all institutions, Admin uses tabs
+  // View state
   const [view, setView] = useState<'dashboard' | 'detail'>('dashboard');
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+  const [activeGerenteTab, setActiveGerenteTab] = useState<GerenteTab>('instituciones');
 
   // Dashboard data
   const [institutions, setInstitutions] = useState<any[]>([]);
   const [allAdmins, setAllAdmins] = useState<any[]>([]);
 
-  // New institution form (Gerente only)
+  // New institution form
   const [showInstForm, setShowInstForm] = useState(false);
   const [newInstName, setNewInstName] = useState('');
   const [instSaving, setInstSaving] = useState(false);
@@ -103,6 +105,7 @@ export default function AdminPage() {
   const [savingConfig, setSavingConfig] = useState(false);
   const [stats, setStats] = useState({ enEspera: 0, atendidosHoy: 0, tEspera: 0, tAtencion: 0 });
   const [funcionarios, setFuncionarios] = useState<any[]>([]);
+  const [pendingFuncionarios, setPendingFuncionarios] = useState<any[]>([]);
 
   // New user form
   const [funcEmail, setFuncEmail] = useState('');
@@ -117,42 +120,16 @@ export default function AdminPage() {
   /* ── Auth effect ─────────────────────────────────────────────────────────── */
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        // Not logged in → go to landing
-        router.replace('/');
-        return;
-      }
+      if (!user) { router.replace('/'); return; }
       setSession(user);
-
       try {
         const q = query(collection(db, 'especialistas'), where('user_id', '==', user.uid));
         const snap = await getDocs(q);
-
-        if (snap.empty) {
-          // User exists in Auth but not in Firestore — redirect
-          router.replace('/');
-          return;
-        }
-
+        if (snap.empty) { router.replace('/'); return; }
         const profile = { id: snap.docs[0].id, ...snap.docs[0].data() } as any;
-
-        if (GERENTE_EMAILS.includes(user.email?.toLowerCase() || '')) {
-          profile.role = 'gerente';
-        }
-
-        // Block non-admin/gerente
-        if (!['admin', 'gerente'].includes(profile.role)) {
-          await signOut(auth);
-          router.replace('/');
-          return;
-        }
-
-        if (profile.estado_funcionario === 'pendiente') {
-          await signOut(auth);
-          router.replace('/');
-          return;
-        }
-
+        if (GERENTE_EMAILS.includes(user.email?.toLowerCase() || '')) profile.role = 'gerente';
+        if (!['admin', 'gerente'].includes(profile.role)) { await signOut(auth); router.replace('/'); return; }
+        if (profile.estado_funcionario === 'pendiente') { await signOut(auth); router.replace('/'); return; }
         setUserProfile(profile);
         await loadDashboard(user.uid, profile.role, profile);
       } catch (err) {
@@ -168,34 +145,23 @@ export default function AdminPage() {
   const loadDashboard = async (uid: string, role: string, profile?: any) => {
     const adminSnap = await getDocs(query(collection(db, 'especialistas'), where('role', '==', 'admin')));
     setAllAdmins(adminSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-
     if (role === 'gerente') {
       const snap = await getDocs(collection(db, 'institutions'));
       setInstitutions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } else {
-      // Admin — load their own institution automatically
-      const instId = (profile || userProfile)?.institution_id;
-      if (instId) {
-        const snap = await getDocs(query(collection(db, 'institutions'), where('owner_id', '==', uid)));
-        const ownInsts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setInstitutions(ownInsts);
-        // Auto-open detail for admin
-        if (ownInsts.length > 0) {
-          await openDetail(ownInsts[0].id);
-        }
-      } else {
-        // Admin has institution_id set
-        const snap = await getDocs(query(collection(db, 'institutions'), where('owner_id', '==', uid)));
-        const ownInsts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setInstitutions(ownInsts);
-        if (ownInsts.length > 0) await openDetail(ownInsts[0].id);
-      }
+      const snap = await getDocs(query(collection(db, 'institutions'), where('owner_id', '==', uid)));
+      const ownInsts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setInstitutions(ownInsts);
+      if (ownInsts.length > 0) await openDetail(ownInsts[0].id);
     }
   };
 
   const loadFuncionarios = async (instId: string) => {
     const snap = await getDocs(query(collection(db, 'especialistas'), where('institution_id', '==', instId)));
-    setFuncionarios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const staff = all.filter((f: any) => f.role === 'funcionario');
+    setFuncionarios(staff.filter((f: any) => f.estado_funcionario !== 'pendiente'));
+    setPendingFuncionarios(staff.filter((f: any) => f.estado_funcionario === 'pendiente'));
   };
 
   // Live stats
@@ -244,13 +210,10 @@ export default function AdminPage() {
           mensaje_dia: '',
         }
       });
-      await updateDoc(doc(db, 'especialistas', userProfile.id), {
-        institution_id: ref.id
-      });
+      await updateDoc(doc(db, 'especialistas', userProfile.id), { institution_id: ref.id });
       setUserProfile({ ...userProfile, institution_id: ref.id });
       setNewInstName(''); setShowInstForm(false);
       await loadDashboard(userProfile.user_id, userProfile.role);
-      alert(`✅ Institución creada: ${newInstName}\nID: ${ref.id}`);
     } catch { alert('Error al crear institución'); }
     setInstSaving(false);
   };
@@ -258,17 +221,49 @@ export default function AdminPage() {
   const handleAuthorizeInstitution = async (inst: any) => {
     if (!confirm(`¿Autorizar la institución "${inst.name}"?`)) return;
     try {
-      // 1. Activate institution
       await updateDoc(doc(db, 'institutions', inst.id), { estado: 'activa' });
-      // 2. Activate admin profile
-      if (inst.owner_id) {
-        await updateDoc(doc(db, 'especialistas', inst.owner_id), { estado_funcionario: 'activo' });
-      }
-      alert('✅ Institución y administrador autorizados.');
+      if (inst.owner_id) await updateDoc(doc(db, 'especialistas', inst.owner_id), { estado_funcionario: 'activo' });
       await loadDashboard(userProfile.user_id, userProfile.role);
-    } catch (err: any) {
-      alert('Error al autorizar: ' + err.message);
+    } catch (err: any) { alert('Error al autorizar: ' + err.message); }
+  };
+
+  const handleDeleteInstitution = async (instId: string, instName: string) => {
+    if (!confirm(`¿Eliminar la institución "${instName}"?\n\nEsta acción no se puede deshacer.`)) return;
+    try {
+      await deleteDoc(doc(db, 'institutions', instId));
+      setInstitutions(prev => prev.filter(i => i.id !== instId));
+    } catch (err: any) { alert('Error al eliminar: ' + err.message); }
+  };
+
+  const handleDeleteAdmin = async (adminId: string, adminName: string) => {
+    if (!confirm(`¿Eliminar el perfil de "${adminName}"?\n\nEl usuario no podrá acceder al sistema.`)) return;
+    try {
+      await deleteDoc(doc(db, 'especialistas', adminId));
+      setAllAdmins(prev => prev.filter(a => a.id !== adminId));
+    } catch (err: any) { alert('Error al eliminar: ' + err.message); }
+  };
+
+  const handleDeleteFuncionario = async (funcId: string, funcName: string) => {
+    if (!confirm(`¿Eliminar al funcionario "${funcName}"?`)) return;
+    try {
+      await deleteDoc(doc(db, 'especialistas', funcId));
+      setFuncionarios(prev => prev.filter(f => f.id !== funcId));
+      setPendingFuncionarios(prev => prev.filter(f => f.id !== funcId));
+    } catch (err: any) { alert('Error al eliminar: ' + err.message); }
+  };
+
+  const handleApproveFuncionario = async (funcId: string, funcName: string) => {
+    const fn = pendingFuncionarios.find(f => f.id === funcId);
+    if (!fn?.departamento) {
+      alert('Asigna primero un departamento al funcionario antes de aprobar.');
+      return;
     }
+    if (!confirm(`¿Aprobar y activar a "${funcName}"?`)) return;
+    try {
+      await updateDoc(doc(db, 'especialistas', funcId), { estado_funcionario: 'activo' });
+      setPendingFuncionarios(prev => prev.filter(f => f.id !== funcId));
+      setFuncionarios(prev => [...prev, { ...fn, estado_funcionario: 'activo' }]);
+    } catch (err: any) { alert('Error al aprobar: ' + err.message); }
   };
 
   const openDetail = async (instId: string) => {
@@ -323,7 +318,6 @@ export default function AdminPage() {
       const updated = [{ nombre: userProfile.nombre, fecha: new Date().toISOString() }, ...logs].slice(0, 3);
       await updateDoc(ref, { currentTurno: 0, ultimo_reinicio: new Date().toISOString(), reset_logs: updated });
       setResetLogs(updated);
-      alert('✅ Conteo reiniciado.');
     }
   };
 
@@ -359,6 +353,7 @@ export default function AdminPage() {
   const updateFuncionario = async (id: string, field: string, value: string) => {
     await updateDoc(doc(db, 'especialistas', id), { [field]: value });
     setFuncionarios(prev => prev.map(f => f.id === id ? { ...f, [field]: value } : f));
+    setPendingFuncionarios(prev => prev.map(f => f.id === id ? { ...f, [field]: value } : f));
   };
 
   const toggleFuncionarioStatus = async (id: string, currentStatus: string) => {
@@ -400,7 +395,7 @@ export default function AdminPage() {
 
   const exportAllAdmins = () => {
     exportToCSV(`todos_los_administradores.csv`, allAdmins.map(a => {
-      const inst = institutions.find(i => i.owner_id === a.id);
+      const inst = institutions.find(i => i.owner_id === a.user_id || i.owner_id === a.id);
       return {
         Nombre: a.nombre || '',
         Email: a.email || '',
@@ -410,6 +405,16 @@ export default function AdminPage() {
         ID_Institucion: inst ? inst.id : ''
       };
     }));
+  };
+
+  const exportAllBD = async () => {
+    const snap = await getDocs(collection(db, 'usuarios'));
+    exportToCSV('bd_global_todas_instituciones.csv', snap.docs.map(d => ({ RUT: d.id, ...d.data() })));
+  };
+
+  const handleDownloadInstBD = async (inst: any) => {
+    const snap = await getDocs(query(collection(db, 'usuarios'), where('institution_id', '==', inst.id)));
+    exportToCSV(`bd_${inst.name}.csv`, snap.docs.map(d => ({ RUT: d.id, ...d.data() })));
   };
 
   /* ── Render ─────────────────────────────────────────────────────────────────── */
@@ -425,10 +430,23 @@ export default function AdminPage() {
   const deptosList = deptosStr.split(',').map(s => s.trim()).filter(Boolean);
   const isGerente = userProfile?.role === 'gerente';
 
-  /* ════════════════════════════════════════════════════════════════════════════ */
+  const gerenteTabs = [
+    { id: 'instituciones' as GerenteTab, Icon: Building2, label: 'Instituciones', count: institutions.length },
+    { id: 'administradores' as GerenteTab, Icon: UserCog, label: 'Administradores', count: allAdmins.length },
+    { id: 'reportes' as GerenteTab, Icon: BarChart3, label: 'Reportes', count: null },
+  ];
+
+  const adminTabs = [
+    { id: 'dashboard' as AdminTab, Icon: LayoutDashboard, label: 'Dashboard', badge: null as number | null },
+    { id: 'config' as AdminTab, Icon: Settings, label: 'Configuración', badge: null as number | null },
+    { id: 'funcionarios' as AdminTab, Icon: Users, label: 'Funcionarios', badge: pendingFuncionarios.length > 0 ? pendingFuncionarios.length : null },
+    { id: 'directorio' as AdminTab, Icon: FileText, label: 'Base de Datos', badge: null as number | null },
+    { id: 'reportes' as AdminTab, Icon: BarChart3, label: 'Reportes', badge: null as number | null },
+  ];
+
   return (
     <div className={styles.shell}>
-      {/* ─── Top Header ──────────────────────────────────────────────────────── */}
+      {/* ─── Header ──────────────────────────────────────────────────────────── */}
       <header className={styles.header}>
         <div className={styles.headerLeft}>
           {isGerente
@@ -454,141 +472,223 @@ export default function AdminPage() {
       </header>
 
       <div className={styles.body}>
-        {/* ─── GERENTE DASHBOARD ─────────────────────────────────────────────── */}
+
+        {/* ══ GERENTE DASHBOARD ══════════════════════════════════════════════ */}
         {isGerente && view === 'dashboard' && (
           <div className={styles.gerenteDash}>
-            {/* Institutions list */}
-            <div className={styles.sectionHead}>
-              <div>
-                <h2 className={styles.sectionTitle}>Todas las Instituciones</h2>
-                <p className={styles.sectionSub}>{institutions.length} institución{institutions.length !== 1 ? 'es' : ''} registrada{institutions.length !== 1 ? 's' : ''}</p>
-              </div>
-              <div style={{display: 'flex', gap: '8px'}}>
-                <button className={styles.btnGhost} onClick={exportAllAdmins} title="Exportar DB Administradores">
-                  <Download size={16} /> Exportar Admins
-                </button>
-                <button className={styles.btnPrimary} onClick={() => setShowInstForm(!showInstForm)}>
-                  <Plus size={16} /> Nueva Institución
-                </button>
-              </div>
-            </div>
 
-            {showInstForm && (
-              <form onSubmit={handleCreateInstitution} className={styles.inlineForm}>
-                <input
-                  type="text"
-                  value={newInstName}
-                  onChange={e => setNewInstName(e.target.value)}
-                  placeholder="Nombre de la nueva institución…"
-                  required autoFocus
-                  className={styles.inlineInput}
-                />
-                <button type="submit" className={styles.btnPrimary} disabled={instSaving}>
-                  {instSaving ? 'Creando…' : 'Crear'}
+            {/* Gerente Tab Nav */}
+            <nav className={styles.gerenteTabNav}>
+              {gerenteTabs.map(({ id, Icon, label, count }) => (
+                <button
+                  key={id}
+                  className={`${styles.gerenteTab} ${activeGerenteTab === id ? styles.gerenteTabActive : ''}`}
+                  onClick={() => setActiveGerenteTab(id)}
+                >
+                  <Icon size={17} />
+                  <span>{label}</span>
+                  {count !== null && <span className={styles.gerenteTabBadge}>{count}</span>}
                 </button>
-                <button type="button" className={styles.btnGhost} onClick={() => setShowInstForm(false)}>Cancelar</button>
-              </form>
+              ))}
+            </nav>
+
+            {/* ── Tab: INSTITUCIONES ─────────────────────────────────────── */}
+            {activeGerenteTab === 'instituciones' && (
+              <div>
+                <div className={styles.sectionHead}>
+                  <div>
+                    <h2 className={styles.sectionTitle}>Instituciones Registradas</h2>
+                    <p className={styles.sectionSub}>{institutions.length} institución{institutions.length !== 1 ? 'es' : ''}</p>
+                  </div>
+                  <button className={styles.btnPrimary} onClick={() => setShowInstForm(!showInstForm)}>
+                    <Plus size={16} /> Nueva Institución
+                  </button>
+                </div>
+
+                {showInstForm && (
+                  <form onSubmit={handleCreateInstitution} className={styles.inlineForm}>
+                    <input
+                      type="text" value={newInstName}
+                      onChange={e => setNewInstName(e.target.value)}
+                      placeholder="Nombre de la nueva institución…" required autoFocus
+                      className={styles.inlineInput}
+                    />
+                    <button type="submit" className={styles.btnPrimary} disabled={instSaving}>
+                      {instSaving ? 'Creando…' : 'Crear'}
+                    </button>
+                    <button type="button" className={styles.btnGhost} onClick={() => setShowInstForm(false)}>Cancelar</button>
+                  </form>
+                )}
+
+                <div className={styles.instGrid}>
+                  {institutions.length === 0 ? (
+                    <div className={styles.emptyState}>
+                      <Building2 size={40} />
+                      <p>No hay instituciones aún. Crea la primera.</p>
+                    </div>
+                  ) : institutions.map(inst => {
+                    const admin = allAdmins.find(a => a.user_id === inst.owner_id || a.id === inst.owner_id);
+                    return (
+                      <div key={inst.id} className={styles.instCard}>
+                        <div className={styles.instCardTop}>
+                          <div className={styles.instDot} style={{ background: inst.config?.tv_primary_color || '#3b82f6' }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <h3 className={styles.instCardName}>
+                              {inst.name}
+                              {inst.estado === 'pendiente' && <span className={styles.pendingBadge}>Pendiente</span>}
+                            </h3>
+                            {admin && <p className={styles.instCardAdmin}>{admin.nombre} · {admin.email}</p>}
+                            <small className={styles.instCardMeta}>{inst.config?.departamentos?.length || 0} departamentos</small>
+                          </div>
+                        </div>
+                        <div className={styles.instCardMono}>
+                          <Link2 size={11} /> /tv?institution={inst.id}
+                        </div>
+                        <div className={styles.instCardActions}>
+                          {inst.estado === 'pendiente' ? (
+                            <button onClick={() => handleAuthorizeInstitution(inst)} className={styles.btnGreen} style={{ flex: 1 }}>
+                              <Shield size={14} /> Autorizar
+                            </button>
+                          ) : (
+                            <button onClick={() => openDetail(inst.id)} className={styles.btnPrimary} style={{ flex: 1 }}>
+                              <Settings size={14} /> Gestionar
+                            </button>
+                          )}
+                          <button onClick={() => handleDownloadInstBD(inst)} className={styles.btnGhost} title="Descargar Base de Datos">
+                            <Download size={14} />
+                          </button>
+                          <button onClick={() => handleDeleteInstitution(inst.id, inst.name)} className={styles.btnDanger} title="Eliminar institución">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             )}
 
-            <div className={styles.instGrid}>
-              {institutions.length === 0 ? (
-                <div className={styles.emptyState}>
-                  <Building2 size={40} />
-                  <p>No hay instituciones aún. Crea la primera.</p>
+            {/* ── Tab: ADMINISTRADORES ──────────────────────────────────── */}
+            {activeGerenteTab === 'administradores' && (
+              <div>
+                <div className={styles.sectionHead}>
+                  <div>
+                    <h2 className={styles.sectionTitle}>Administradores</h2>
+                    <p className={styles.sectionSub}>{allAdmins.length} registrado{allAdmins.length !== 1 ? 's' : ''}</p>
+                  </div>
                 </div>
-              ) : institutions.map(inst => (
-                <div key={inst.id} className={styles.instCard}>
-                  <div className={styles.instCardTop}>
-                    <div className={styles.instDot} style={{ background: inst.config?.tv_primary_color || '#3b82f6' }} />
-                    <div>
-                      <h3 className={styles.instCardName}>
-                        {inst.name}
-                        {inst.estado === 'pendiente' && <span className={styles.pendingBadge}>Pendiente</span>}
-                      </h3>
-                      <small className={styles.instCardMeta}>{inst.config?.departamentos?.length || 0} departamentos</small>
+
+                <div className={styles.card}>
+                  <div className={styles.cardHead}>
+                    <UserPlus size={20} className={styles.cardHeadIcon} />
+                    <h2>Registrar Administrador</h2>
+                  </div>
+                  <p className={styles.cardDesc}>Los administradores gestionan su propia institución y funcionarios.</p>
+                  <form onSubmit={e => handleRegisterUser(e, 'admin')} className={styles.userForm}>
+                    {funcMsg && <div className={funcMsg.startsWith('✅') ? styles.msgSuccess : styles.msgError}>{funcMsg}</div>}
+                    <div className={styles.formRow}>
+                      <div className={styles.formGroup}>
+                        <label>Nombre Completo</label>
+                        <input type="text" value={funcNombre} onChange={e => setFuncNombre(e.target.value)} placeholder="Juan Pérez" required />
+                      </div>
+                      <div className={styles.formGroup}>
+                        <label>Correo Electrónico</label>
+                        <input type="email" value={funcEmail} onChange={e => setFuncEmail(e.target.value)} placeholder="admin@municipio.cl" required />
+                      </div>
+                      <div className={styles.formGroup}>
+                        <label>Contraseña Temporal</label>
+                        <input type="password" value={funcPass} onChange={e => setFuncPass(e.target.value)} minLength={6} required />
+                      </div>
+                    </div>
+                    <button type="submit" className={styles.btnPrimary} disabled={funcLoading}>
+                      {funcLoading ? 'Registrando…' : <><UserPlus size={15} /> Registrar Administrador</>}
+                    </button>
+                  </form>
+                </div>
+
+                <div className={styles.card} style={{ marginTop: '1.25rem' }}>
+                  <div className={styles.cardHead}>
+                    <Users size={18} className={styles.cardHeadIcon} />
+                    <h2>Lista de Administradores</h2>
+                  </div>
+                  <div className={styles.tableWrap}>
+                    <table className={styles.table}>
+                      <thead>
+                        <tr>
+                          <th>Nombre</th><th>Email</th><th>Institución</th><th>Estado</th><th>Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allAdmins.map(a => {
+                          const inst = institutions.find(i => i.owner_id === a.user_id || i.owner_id === a.id);
+                          return (
+                            <tr key={a.id}>
+                              <td>{a.nombre}</td>
+                              <td>{a.email || '—'}</td>
+                              <td>{inst ? inst.name : <span style={{ color: 'var(--text-secondary)' }}>Sin institución</span>}</td>
+                              <td><span className={styles.chip} data-role={a.estado_funcionario === 'activo' ? 'admin' : 'funcionario'}>{a.estado_funcionario || 'inactivo'}</span></td>
+                              <td>
+                                <button className={styles.btnDanger} onClick={() => handleDeleteAdmin(a.id, a.nombre)} style={{ padding: '0.45rem 0.9rem', fontSize: '0.82rem' }}>
+                                  <Trash2 size={13} /> Eliminar
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {allAdmins.length === 0 && <tr><td colSpan={5} className={styles.noData}>Sin administradores.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Tab: REPORTES ─────────────────────────────────────────── */}
+            {activeGerenteTab === 'reportes' && (
+              <div>
+                <div className={styles.sectionHead}>
+                  <div>
+                    <h2 className={styles.sectionTitle}>Reportes Globales</h2>
+                    <p className={styles.sectionSub}>Exporta datos de todo el sistema</p>
+                  </div>
+                </div>
+                <div className={styles.reportGrid}>
+                  <div className={styles.reportCard}>
+                    <div className={styles.reportCardIcon}><Users size={28} /></div>
+                    <h3>Base de Datos Global</h3>
+                    <p>Todos los usuarios registrados en el sistema, de todas las instituciones.</p>
+                    <button className={styles.btnPrimary} onClick={exportAllBD}>
+                      <Download size={16} /> Descargar BD Global (CSV)
+                    </button>
+                  </div>
+                  <div className={styles.reportCard}>
+                    <div className={styles.reportCardIcon}><UserCog size={28} /></div>
+                    <h3>Administradores</h3>
+                    <p>Lista completa de todos los administradores con sus instituciones asignadas.</p>
+                    <button className={styles.btnPrimary} onClick={exportAllAdmins}>
+                      <Download size={16} /> Descargar Admins (CSV)
+                    </button>
+                  </div>
+                  <div className={styles.reportCard}>
+                    <div className={styles.reportCardIcon}><Building2 size={28} /></div>
+                    <h3>BD por Institución</h3>
+                    <p>Descarga la base de datos de usuarios de cada institución individualmente.</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.25rem' }}>
+                      {institutions.map(inst => (
+                        <button key={inst.id} className={styles.btnGhost} onClick={() => handleDownloadInstBD(inst)} style={{ justifyContent: 'flex-start' }}>
+                          <Download size={14} /> {inst.name}
+                        </button>
+                      ))}
+                      {institutions.length === 0 && <p className={styles.noData}>Sin instituciones.</p>}
                     </div>
                   </div>
-                  <div className={styles.instCardMono}>
-                    <Link2 size={11} /> /tv?institution={inst.id}
-                  </div>
-                  <div className={styles.instCardActions}>
-                    {inst.estado === 'pendiente' ? (
-                      <button onClick={() => handleAuthorizeInstitution(inst)} className={styles.btnGreen} style={{ flex: 1, justifyContent: 'center' }}>
-                        <Shield size={14} /> Autorizar Ingreso
-                      </button>
-                    ) : (
-                      <>
-                        <button onClick={() => openDetail(inst.id)} className={styles.btnPrimary} style={{ flex: 1, justifyContent: 'center' }}>
-                          <Settings size={14} /> Gestionar
-                        </button>
-                        <button onClick={() => window.open(`/tv?institution=${inst.id}`, '_blank')} className={styles.btnGreen}>
-                          <Eye size={14} />
-                        </button>
-                        <button onClick={() => window.open(`/totem?institution=${inst.id}`, '_blank')} className={styles.btnAmber}>
-                          <Tablet size={14} />
-                        </button>
-                        <button onClick={async () => {
-                          const snap = await getDocs(query(collection(db, 'usuarios'), where('institution_id', '==', inst.id)));
-                          exportToCSV(`bd_${inst.name}.csv`, snap.docs.map(d => ({ RUT: d.id, ...d.data() })));
-                        }} className={styles.btnGhost}>
-                          <Download size={14} />
-                        </button>
-                      </>
-                    )}
-                  </div>
                 </div>
-              ))}
-            </div>
-
-            {/* Create Admin section */}
-            <div className={styles.card}>
-              <div className={styles.cardHead}>
-                <UserPlus size={20} className={styles.cardHeadIcon} />
-                <h2>Registrar Administrador</h2>
               </div>
-              <p className={styles.cardDesc}>Los administradores gestionan su propia institución y funcionarios.</p>
-              <form onSubmit={e => handleRegisterUser(e, 'admin')} className={styles.userForm}>
-                {funcMsg && <div className={funcMsg.startsWith('✅') ? styles.msgSuccess : styles.msgError}>{funcMsg}</div>}
-                <div className={styles.formRow}>
-                  <div className={styles.formGroup}>
-                    <label>Nombre Completo</label>
-                    <input type="text" value={funcNombre} onChange={e => setFuncNombre(e.target.value)} placeholder="Juan Pérez" required />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Correo Electrónico</label>
-                    <input type="email" value={funcEmail} onChange={e => setFuncEmail(e.target.value)} placeholder="admin@municipio.cl" required />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Contraseña Temporal</label>
-                    <input type="password" value={funcPass} onChange={e => setFuncPass(e.target.value)} minLength={6} required />
-                  </div>
-                </div>
-                <button type="submit" className={styles.btnPrimary} disabled={funcLoading}>
-                  {funcLoading ? 'Registrando…' : <><UserPlus size={15} /> Registrar Administrador</>}
-                </button>
-              </form>
-
-              <div className={styles.tableWrap} style={{ marginTop: '1.5rem' }}>
-                <h3 className={styles.tableTitle}>Administradores Registrados</h3>
-                <table className={styles.table}>
-                  <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th></tr></thead>
-                  <tbody>
-                    {allAdmins.map(a => (
-                      <tr key={a.id}>
-                        <td>{a.nombre}</td>
-                        <td>{a.email || '—'}</td>
-                        <td><span className={styles.chip} data-role={a.role}>{a.role}</span></td>
-                      </tr>
-                    ))}
-                    {allAdmins.length === 0 && <tr><td colSpan={3} className={styles.noData}>Sin administradores.</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            )}
           </div>
         )}
 
-        {/* ─── EMPTY STATE FOR ADMINS WITHOUT INSTITUTIONS ─────────────── */}
+        {/* ══ ADMIN SIN INSTITUCIÓN ══════════════════════════════════════════ */}
         {!isGerente && view === 'dashboard' && (
           <div className={styles.emptyState}>
             <Building2 size={40} />
@@ -601,11 +701,9 @@ export default function AdminPage() {
             ) : (
               <form onSubmit={handleCreateInstitution} className={styles.inlineForm} style={{ marginTop: '1rem' }}>
                 <input
-                  type="text"
-                  value={newInstName}
+                  type="text" value={newInstName}
                   onChange={e => setNewInstName(e.target.value)}
-                  placeholder="Nombre de la institución…"
-                  required autoFocus
+                  placeholder="Nombre de la institución…" required autoFocus
                   className={styles.inlineInput}
                 />
                 <button type="submit" className={styles.btnPrimary} disabled={instSaving}>
@@ -617,17 +715,15 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* ─── DETAIL VIEW (Admin tabs + Gerente drilling into institution) ───── */}
+        {/* ══ DETAIL VIEW ════════════════════════════════════════════════════ */}
         {view === 'detail' && (
           <div className={styles.detailWrapper}>
-            {/* Back button (Gerente only) */}
             {isGerente && (
               <button className={styles.backBtn} onClick={() => setView('dashboard')}>
                 <ArrowLeft size={15} /> Todas las Instituciones
               </button>
             )}
 
-            {/* Institution header */}
             <div className={styles.instHeader}>
               <div className={styles.instHeaderLeft}>
                 <div className={styles.instHeaderDot} style={{ background: tvColor }} />
@@ -651,27 +747,21 @@ export default function AdminPage() {
 
             {/* Tab Navigation */}
             <nav className={styles.tabNav}>
-              {([
-                ['dashboard', LayoutDashboard, 'Dashboard'],
-                ['config', Settings, 'Configuración'],
-                ['funcionarios', Users, 'Funcionarios'],
-                ['directorio', FileText, 'Base de Datos'],
-                ['reportes', BarChart3, 'Reportes'],
-              ] as const).map(([id, Icon, label]) => (
+              {adminTabs.map(({ id, Icon, label, badge }) => (
                 <button
                   key={id}
                   className={`${styles.tabBtn} ${activeTab === id ? styles.tabBtnActive : ''}`}
-                  onClick={() => setActiveTab(id as AdminTab)}
+                  onClick={() => setActiveTab(id)}
                 >
                   <Icon size={16} /> {label}
+                  {badge !== null && <span className={styles.tabBadge}>{badge}</span>}
                 </button>
               ))}
             </nav>
 
-            {/* ── TAB: DASHBOARD ─────────────────────────────────────────────── */}
+            {/* ── TAB: DASHBOARD ────────────────────────────────────────── */}
             {activeTab === 'dashboard' && (
               <div className={styles.tabContent}>
-                {/* KPI Cards */}
                 <div className={styles.kpiGrid}>
                   <div className={styles.kpiCard}>
                     <div className={styles.kpiLabel}><Users size={16} /> En Espera</div>
@@ -694,7 +784,6 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Reset counter */}
                 <div className={styles.dangerZone}>
                   <div className={styles.dangerInfo}>
                     <h3><AlertTriangle size={18} /> Reinicio de Conteo</h3>
@@ -705,12 +794,9 @@ export default function AdminPage() {
                       </ul>
                     )}
                   </div>
-                  <button onClick={handleReiniciarConteo} className={styles.btnDanger}>
-                    Reiniciar a 0
-                  </button>
+                  <button onClick={handleReiniciarConteo} className={styles.btnDanger}>Reiniciar a 0</button>
                 </div>
 
-                {/* Funcionarios quick overview */}
                 <div className={styles.card}>
                   <div className={styles.cardHead}>
                     <Users size={18} className={styles.cardHeadIcon} />
@@ -720,9 +806,7 @@ export default function AdminPage() {
                     {funcionarios.map(f => (
                       <div key={f.id} className={styles.staffBadge} data-status={f.estado_funcionario || 'inactivo'}>
                         <div className={styles.staffAvatar}>
-                          {f.avatar_url
-                            ? <img src={f.avatar_url} alt="" />
-                            : <span>{f.nombre?.substring(0, 2).toUpperCase() || 'FN'}</span>}
+                          {f.avatar_url ? <img src={f.avatar_url} alt="" /> : <span>{f.nombre?.substring(0, 2).toUpperCase() || 'FN'}</span>}
                         </div>
                         <div>
                           <strong>{f.nombre}</strong>
@@ -733,30 +817,23 @@ export default function AdminPage() {
                         </div>
                       </div>
                     ))}
-                    {funcionarios.length === 0 && <p className={styles.noData}>Sin funcionarios registrados.</p>}
+                    {funcionarios.length === 0 && <p className={styles.noData}>Sin funcionarios activos.</p>}
                   </div>
                 </div>
               </div>
             )}
 
-            {/* ── TAB: CONFIGURACIÓN ─────────────────────────────────────────── */}
+            {/* ── TAB: CONFIGURACIÓN ────────────────────────────────────── */}
             {activeTab === 'config' && (
               <div className={styles.tabContent}>
                 <div className={styles.configGrid}>
-                  {/* TV & Branding */}
                   <div className={styles.card}>
                     <div className={styles.cardHead}>
                       <Monitor size={18} className={styles.cardHeadIcon} />
                       <h2>Pantalla TV & Branding</h2>
                     </div>
-                    <div className={styles.formGroup}>
-                      <label>Nombre en TV</label>
-                      <input value={tvName} onChange={e => setTvName(e.target.value)} placeholder="Ej: CESFAM Dr. Barros Luco" />
-                    </div>
-                    <div className={styles.formGroup}>
-                      <label>URL del Logo</label>
-                      <input value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://tu-institucion.cl/logo.png" />
-                    </div>
+                    <div className={styles.formGroup}><label>Nombre en TV</label><input value={tvName} onChange={e => setTvName(e.target.value)} placeholder="Ej: CESFAM Dr. Barros Luco" /></div>
+                    <div className={styles.formGroup}><label>URL del Logo</label><input value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://tu-institucion.cl/logo.png" /></div>
                     <div className={styles.formGroup}>
                       <label>Color Primario</label>
                       <div className={styles.colorRow}>
@@ -764,79 +841,35 @@ export default function AdminPage() {
                         <input value={tvColor} onChange={e => setTvColor(e.target.value)} style={{ flex: 1 }} />
                       </div>
                     </div>
-                    <div className={styles.formGroup}>
-                      <label>URL Fondo TV (dejar vacío para oscuro)</label>
-                      <input value={tvBg} onChange={e => setTvBg(e.target.value)} placeholder="https://..." />
-                    </div>
-                    <div className={styles.formGroup}>
-                      <label>Mensaje del Día (texto desplazable)</label>
-                      <textarea rows={3} value={mensajeDia} onChange={e => setMensajeDia(e.target.value)} placeholder="Escribe el mensaje para la pantalla…" />
-                    </div>
+                    <div className={styles.formGroup}><label>URL Fondo TV</label><input value={tvBg} onChange={e => setTvBg(e.target.value)} placeholder="https://..." /></div>
+                    <div className={styles.formGroup}><label>Mensaje del Día</label><textarea rows={3} value={mensajeDia} onChange={e => setMensajeDia(e.target.value)} placeholder="Texto desplazable en pantalla…" /></div>
                   </div>
-
-                  {/* Departamentos & Webhook */}
                   <div className={styles.card}>
-                    <div className={styles.cardHead}>
-                      <Settings size={18} className={styles.cardHeadIcon} />
-                      <h2>Departamentos & Automatización</h2>
-                    </div>
-                    <div className={styles.formGroup}>
-                      <label>Categorías / Departamentos (separados por coma)</label>
-                      <textarea rows={6} value={deptosStr} onChange={e => setDeptosStr(e.target.value)} placeholder="OIRS, DIDECO, Atención General…" />
-                    </div>
-                    <div className={styles.formGroup}>
-                      <label>Departamento de Orientación (OIRS)</label>
-                      <input value={oirsDpto} onChange={e => setOirsDpto(e.target.value)} placeholder="OIRS" />
-                    </div>
-                    <div className={styles.formGroup}>
-                      <label>Webhook n8n (Opcional)</label>
-                      <input value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} placeholder="https://n8n.tu-servidor.com/webhook/…" />
-                    </div>
+                    <div className={styles.cardHead}><Settings size={18} className={styles.cardHeadIcon} /><h2>Departamentos & Automatización</h2></div>
+                    <div className={styles.formGroup}><label>Categorías / Departamentos (separados por coma)</label><textarea rows={6} value={deptosStr} onChange={e => setDeptosStr(e.target.value)} placeholder="OIRS, DIDECO, Atención General…" /></div>
+                    <div className={styles.formGroup}><label>Departamento de Orientación (OIRS)</label><input value={oirsDpto} onChange={e => setOirsDpto(e.target.value)} placeholder="OIRS" /></div>
+                    <div className={styles.formGroup}><label>Webhook n8n (Opcional)</label><input value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} placeholder="https://n8n.tu-servidor.com/webhook/…" /></div>
                   </div>
                 </div>
 
-                {/* Enlaces Públicos */}
                 <div className={styles.card} style={{ marginTop: '1.5rem' }}>
-                  <div className={styles.cardHead}>
-                    <Link2 size={18} className={styles.cardHeadIcon} />
-                    <h2>Enlaces Públicos</h2>
-                  </div>
-                  <p className={styles.cardDesc}>Copia y pega estas direcciones en los navegadores de tus Smart TVs o Tablets para mostrar el sistema.</p>
-                  
+                  <div className={styles.cardHead}><Link2 size={18} className={styles.cardHeadIcon} /><h2>Enlaces Públicos</h2></div>
+                  <p className={styles.cardDesc}>Copia estas URLs en Smart TVs o Tablets.</p>
                   <div className={styles.formRow} style={{ marginTop: '1rem' }}>
                     <div className={styles.formGroup}>
                       <label><Monitor size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> Pantalla de TV</label>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <input 
-                          type="text" 
-                          readOnly 
-                          value={`${typeof window !== 'undefined' ? window.location.origin : ''}/tv?institution=${institutionId}`} 
-                          onClick={e => (e.target as HTMLInputElement).select()}
-                          style={{ flex: 1, cursor: 'text', background: 'var(--bg-color)' }}
-                        />
-                        <button type="button" onClick={() => {
-                          navigator.clipboard.writeText(`${window.location.origin}/tv?institution=${institutionId}`);
-                          alert('Enlace de TV copiado');
-                        }} className={styles.btnPrimary}>Copiar</button>
-                        <a href={`/tv?institution=${institutionId}`} target="_blank" className={styles.btnGhost} style={{ padding: '0 0.5rem' }}><Eye size={16} /></a>
+                        <input type="text" readOnly value={`${typeof window !== 'undefined' ? window.location.origin : ''}/tv?institution=${institutionId}`} onClick={e => (e.target as HTMLInputElement).select()} style={{ flex: 1, cursor: 'text', background: 'var(--bg-color)' }} />
+                        <button type="button" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/tv?institution=${institutionId}`)} className={styles.btnPrimary}>Copiar</button>
+                        <a href={`/tv?institution=${institutionId}`} target="_blank" className={styles.btnGhost} style={{ padding: '0 0.75rem' }}><Eye size={16} /></a>
                       </div>
                     </div>
-                    
                     <div className={styles.formGroup}>
-                      <label><Tablet size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> Tótem de Atención</label>
+                      <label><Tablet size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> Tótem</label>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <input 
-                          type="text" 
-                          readOnly 
-                          value={`${typeof window !== 'undefined' ? window.location.origin : ''}/totem?institution=${institutionId}`} 
-                          onClick={e => (e.target as HTMLInputElement).select()}
-                          style={{ flex: 1, cursor: 'text', background: 'var(--bg-color)' }}
-                        />
-                        <button type="button" onClick={() => {
-                          navigator.clipboard.writeText(`${window.location.origin}/totem?institution=${institutionId}`);
-                          alert('Enlace de Tótem copiado');
-                        }} className={styles.btnPrimary}>Copiar</button>
-                        <a href={`/totem?institution=${institutionId}`} target="_blank" className={styles.btnGhost} style={{ padding: '0 0.5rem' }}><Eye size={16} /></a>
+                        <input type="text" readOnly value={`${typeof window !== 'undefined' ? window.location.origin : ''}/totem?institution=${institutionId}`} onClick={e => (e.target as HTMLInputElement).select()} style={{ flex: 1, cursor: 'text', background: 'var(--bg-color)' }} />
+                        <button type="button" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/totem?institution=${institutionId}`)} className={styles.btnPrimary}>Copiar</button>
+                        <a href={`/totem?institution=${institutionId}`} target="_blank" className={styles.btnGhost} style={{ padding: '0 0.75rem' }}><Eye size={16} /></a>
                       </div>
                     </div>
                   </div>
@@ -848,10 +881,58 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* ── TAB: FUNCIONARIOS ──────────────────────────────────────────── */}
+            {/* ── TAB: FUNCIONARIOS ─────────────────────────────────────── */}
             {activeTab === 'funcionarios' && (
               <div className={styles.tabContent}>
-                {/* Register Funcionario */}
+
+                {/* Pending section */}
+                {pendingFuncionarios.length > 0 && (
+                  <div className={styles.pendingSection}>
+                    <div className={styles.pendingSectionHeader}>
+                      <AlertTriangle size={18} />
+                      <h3>Pendientes de Aprobación ({pendingFuncionarios.length})</h3>
+                    </div>
+                    <div className={styles.tableWrap}>
+                      <table className={styles.table}>
+                        <thead>
+                          <tr><th>Nombre</th><th>Email</th><th>Cargo</th><th>Departamento</th><th>Acciones</th></tr>
+                        </thead>
+                        <tbody>
+                          {pendingFuncionarios.map(f => (
+                            <tr key={f.id}>
+                              <td>{f.nombre}</td>
+                              <td>{f.email || '—'}</td>
+                              <td>{f.cargo || '—'}</td>
+                              <td>
+                                <select
+                                  value={f.departamento || ''}
+                                  onChange={e => updateFuncionario(f.id, 'departamento', e.target.value)}
+                                  className={styles.selectField}
+                                  style={{ padding: '0.35rem 0.5rem', fontSize: '0.82rem', width: 'auto', minWidth: '130px' }}
+                                >
+                                  <option value="">Asignar depto…</option>
+                                  {deptosList.map(d => <option key={d} value={d}>{d}</option>)}
+                                </select>
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                  <button className={styles.btnGreen} onClick={() => handleApproveFuncionario(f.id, f.nombre)} style={{ padding: '0.45rem 0.9rem', fontSize: '0.82rem' }}>
+                                    <CheckCircle size={13} /> Aprobar
+                                  </button>
+                                  <button className={styles.btnDanger} onClick={() => handleDeleteFuncionario(f.id, f.nombre)} style={{ padding: '0.45rem 0.9rem', fontSize: '0.82rem' }}>
+                                    <Trash2 size={13} /> Rechazar
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Register form */}
                 <div className={styles.card}>
                   <div className={styles.cardHead}>
                     <UserPlus size={18} className={styles.cardHeadIcon} />
@@ -896,7 +977,7 @@ export default function AdminPage() {
                   </form>
                 </div>
 
-                {/* Funcionarios table by dept */}
+                {/* Funcionarios by dept */}
                 {deptosList.map(depto => {
                   const funcs = funcionarios.filter(f => f.departamento === depto);
                   return (
@@ -907,7 +988,9 @@ export default function AdminPage() {
                       </div>
                       <div className={styles.tableWrap}>
                         <table className={styles.table}>
-                          <thead><tr><th>Perfil</th><th>Nombre</th><th>Cargo</th><th>Módulo</th><th>Estado</th><th>Acción</th></tr></thead>
+                          <thead>
+                            <tr><th>Perfil</th><th>Nombre</th><th>Cargo</th><th>Módulo</th><th>Estado</th><th>Acciones</th></tr>
+                          </thead>
                           <tbody>
                             {funcs.map(f => (
                               <tr key={f.id}>
@@ -924,31 +1007,41 @@ export default function AdminPage() {
                                 <td><input className={styles.tableInput} value={f.letra_atencion || ''} onChange={e => updateFuncionario(f.id, 'letra_atencion', e.target.value)} /></td>
                                 <td><span className={styles.chip} data-role={f.estado_funcionario === 'activo' ? 'admin' : 'funcionario'}>{f.estado_funcionario || 'inactivo'}</span></td>
                                 <td>
-                                  <button
-                                    className={f.estado_funcionario === 'activo' ? styles.btnAmber : styles.btnGreen}
-                                    onClick={() => toggleFuncionarioStatus(f.id, f.estado_funcionario || 'inactivo')}
-                                    style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem' }}
-                                    title={f.estado_funcionario === 'activo' ? 'Desactivar' : 'Activar'}
-                                  >
-                                    {f.estado_funcionario === 'activo' ? 'Desactivar' : 'Activar'}
-                                  </button>
+                                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                    <button
+                                      className={f.estado_funcionario === 'activo' ? styles.btnAmber : styles.btnGreen}
+                                      onClick={() => toggleFuncionarioStatus(f.id, f.estado_funcionario || 'inactivo')}
+                                      style={{ padding: '0.45rem 0.9rem', fontSize: '0.82rem' }}
+                                    >
+                                      {f.estado_funcionario === 'activo' ? 'Desactivar' : 'Activar'}
+                                    </button>
+                                    <button
+                                      className={styles.btnDanger}
+                                      onClick={() => handleDeleteFuncionario(f.id, f.nombre)}
+                                      style={{ padding: '0.45rem 0.9rem', fontSize: '0.82rem' }}
+                                      title="Eliminar"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))}
-                            {funcs.length === 0 && <tr><td colSpan={6} className={styles.noData}>Sin funcionarios.</td></tr>}
+                            {funcs.length === 0 && <tr><td colSpan={6} className={styles.noData}>Sin funcionarios en este departamento.</td></tr>}
                           </tbody>
                         </table>
                       </div>
                     </div>
                   );
                 })}
+
                 <div className={styles.exportRow}>
                   <button className={styles.btnGhost} onClick={exportFuncionarios}><Download size={15} /> Exportar Funcionarios (CSV)</button>
                 </div>
               </div>
             )}
 
-            {/* ── TAB: DIRECTORIO / BASE DE DATOS ────────────────────────────── */}
+            {/* ── TAB: BASE DE DATOS ────────────────────────────────────── */}
             {activeTab === 'directorio' && (
               <div className={styles.tabContent}>
                 <UserDirectory
@@ -960,7 +1053,7 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* ── TAB: REPORTES ──────────────────────────────────────────────── */}
+            {/* ── TAB: REPORTES ─────────────────────────────────────────── */}
             {activeTab === 'reportes' && (
               <div className={styles.tabContent}>
                 <div className={styles.reportGrid}>
@@ -968,56 +1061,31 @@ export default function AdminPage() {
                     <div className={styles.reportCardIcon}><Users size={28} /></div>
                     <h3>Base de Datos de Usuarios</h3>
                     <p>Exporta todos los usuarios registrados de esta institución con sus datos completos.</p>
-                    <button className={styles.btnPrimary} onClick={exportUsuarios}>
-                      <Download size={16} /> Descargar Usuarios (CSV)
-                    </button>
+                    <button className={styles.btnPrimary} onClick={exportUsuarios}><Download size={16} /> Descargar Usuarios (CSV)</button>
                   </div>
                   <div className={styles.reportCard}>
                     <div className={styles.reportCardIcon}><BarChart3 size={28} /></div>
                     <h3>Historial de Turnos</h3>
-                    <p>Descarga el registro completo de turnos atendidos, saltados y en espera.</p>
-                    <button className={styles.btnPrimary} onClick={exportTurnos}>
-                      <Download size={16} /> Descargar Turnos (CSV)
-                    </button>
+                    <p>Registro completo de turnos atendidos, saltados y en espera.</p>
+                    <button className={styles.btnPrimary} onClick={exportTurnos}><Download size={16} /> Descargar Turnos (CSV)</button>
                   </div>
                   <div className={styles.reportCard}>
                     <div className={styles.reportCardIcon}><UserCog size={28} /></div>
                     <h3>Registro de Funcionarios</h3>
                     <p>Lista completa del personal con roles, módulos y estado de atención.</p>
-                    <button className={styles.btnPrimary} onClick={exportFuncionarios}>
-                      <Download size={16} /> Descargar Funcionarios (CSV)
-                    </button>
+                    <button className={styles.btnPrimary} onClick={exportFuncionarios}><Download size={16} /> Descargar Funcionarios (CSV)</button>
                   </div>
                 </div>
 
-                {/* Stats summary */}
                 <div className={styles.card} style={{ marginTop: '1.5rem' }}>
                   <div className={styles.cardHead}><BarChart3 size={18} className={styles.cardHeadIcon} /><h2>Métricas en Tiempo Real</h2></div>
                   <div className={styles.metricsGrid}>
-                    <div className={styles.metricItem}>
-                      <span className={styles.metricVal}>{stats.enEspera}</span>
-                      <span className={styles.metricLabel}>En Espera</span>
-                    </div>
-                    <div className={styles.metricItem}>
-                      <span className={styles.metricVal} style={{ color: 'var(--success)' }}>{stats.atendidosHoy}</span>
-                      <span className={styles.metricLabel}>Atendidos Hoy</span>
-                    </div>
-                    <div className={styles.metricItem}>
-                      <span className={styles.metricVal} style={{ color: stats.tEspera > 15 ? 'var(--destructive)' : 'var(--primary)' }}>{stats.tEspera} min</span>
-                      <span className={styles.metricLabel}>Espera Prom.</span>
-                    </div>
-                    <div className={styles.metricItem}>
-                      <span className={styles.metricVal}>{stats.tAtencion} min</span>
-                      <span className={styles.metricLabel}>Atención Prom.</span>
-                    </div>
-                    <div className={styles.metricItem}>
-                      <span className={styles.metricVal}>{funcionarios.filter(f => f.estado_funcionario === 'activo').length}</span>
-                      <span className={styles.metricLabel}>Funcionarios Activos</span>
-                    </div>
-                    <div className={styles.metricItem}>
-                      <span className={styles.metricVal}>{deptosList.length}</span>
-                      <span className={styles.metricLabel}>Departamentos</span>
-                    </div>
+                    <div className={styles.metricItem}><span className={styles.metricVal}>{stats.enEspera}</span><span className={styles.metricLabel}>En Espera</span></div>
+                    <div className={styles.metricItem}><span className={styles.metricVal} style={{ color: 'var(--success)' }}>{stats.atendidosHoy}</span><span className={styles.metricLabel}>Atendidos Hoy</span></div>
+                    <div className={styles.metricItem}><span className={styles.metricVal} style={{ color: stats.tEspera > 15 ? 'var(--destructive)' : 'var(--primary)' }}>{stats.tEspera} min</span><span className={styles.metricLabel}>Espera Prom.</span></div>
+                    <div className={styles.metricItem}><span className={styles.metricVal}>{stats.tAtencion} min</span><span className={styles.metricLabel}>Atención Prom.</span></div>
+                    <div className={styles.metricItem}><span className={styles.metricVal}>{funcionarios.filter(f => f.estado_funcionario === 'activo').length}</span><span className={styles.metricLabel}>Activos</span></div>
+                    <div className={styles.metricItem}><span className={styles.metricVal}>{deptosList.length}</span><span className={styles.metricLabel}>Departamentos</span></div>
                   </div>
                 </div>
               </div>

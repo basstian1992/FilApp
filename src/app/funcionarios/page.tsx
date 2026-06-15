@@ -173,6 +173,12 @@ export default function StaffPage() {
             return;
           }
 
+          // Block pending funcionarios — redirect to landing with pending screen
+          if ((specData as any).estado_funcionario === 'pendiente') {
+            router.replace('/');
+            return;
+          }
+
           setFuncionario(specData);
           setWhatsappPhone(specData.whatsapp_phone || '');
           setWhatsappApiKey(specData.whatsapp_apikey || '');

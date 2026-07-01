@@ -22,77 +22,93 @@ export default function LandingPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadingError, setLoadingError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
 
+  // Safety timeout: prevent infinite loading
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoading(prev => {
+        if (prev) { setLoadingError('Tiempo de espera agotado. Verifica la conexión.'); return false; }
+        return prev;
+      });
+    }, 15000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const handleError = (err: any) => {
+      console.error('Auth loading error:', err);
+      setLoadingError('Error al cargar la sesión. Reintente.');
+      setLoading(false);
+    };
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setSession(user);
-      if (user) {
-        let q = query(collection(db, 'especialistas'), where('user_id', '==', user.uid));
-        let snap = await getDocs(q);
+      try {
+        setSession(user);
+        if (user) {
+          let q = query(collection(db, 'especialistas'), where('user_id', '==', user.uid));
+          let snap = await getDocs(q);
 
-        const isGerente = user.email?.toLowerCase() === 'b.alarconatenas@gmail.com' || user.email?.toLowerCase() === 'contacto@asesoriapublica.cl';
+          const isGerente = user.email?.toLowerCase() === 'b.alarconatenas@gmail.com' || user.email?.toLowerCase() === 'contacto@asesoriapublica.cl';
 
-        // Auto-fix special emails
-        const isAdmin = user.email?.toLowerCase() === 'contacto@asesoriapublica.cl'; // Fallback check
-        const isForceFuncionario = user.email?.toLowerCase() === 'sanappchile@gmail.com' || user.email?.toLowerCase() === 'cvappchile@gmail.com';
-        
-        const forcedRole = isGerente ? 'gerente' : (isAdmin ? 'admin' : (isForceFuncionario ? 'funcionario' : null));
-        const expectedName = isGerente ? 'Gerente General' : (isAdmin ? 'Administrador Principal' : 'Funcionario');
+          const isForceFuncionario = user.email?.toLowerCase() === 'sanappchile@gmail.com' || user.email?.toLowerCase() === 'cvappchile@gmail.com';
+          
+          const forcedRole = isGerente ? 'gerente' : (isForceFuncionario ? 'funcionario' : null);
+          const expectedName = isGerente ? 'Gerente General' : 'Funcionario';
 
-        if (forcedRole) {
-          if (snap.empty) {
-            await setDoc(doc(db, 'especialistas', user.uid), {
-              user_id: user.uid,
-              role: forcedRole,
-              nombre: expectedName,
-              email: user.email,
-              estado_funcionario: 'activo',
-              departamento: forcedRole === 'funcionario' ? 'Atención General' : 'Administración',
-              cargo: expectedName,
-              letra_atencion: 'A',
-            });
-            snap = await getDocs(q);
-          } else {
-            const data = snap.docs[0].data() as any;
-            if (data.role !== forcedRole || data.nombre !== expectedName) {
-              await updateDoc(doc(db, 'especialistas', snap.docs[0].id), { role: forcedRole, nombre: expectedName });
+          if (forcedRole) {
+            if (snap.empty) {
+              await setDoc(doc(db, 'especialistas', user.uid), {
+                user_id: user.uid,
+                role: forcedRole,
+                nombre: expectedName,
+                email: user.email,
+                estado_funcionario: 'activo',
+                departamento: forcedRole === 'funcionario' ? 'Atención General' : 'Administración',
+                cargo: expectedName,
+                letra_atencion: 'A',
+              });
               snap = await getDocs(q);
+            } else {
+              const data = snap.docs[0].data() as any;
+              if (data.role !== forcedRole || data.nombre !== expectedName) {
+                await updateDoc(doc(db, 'especialistas', snap.docs[0].id), { role: forcedRole, nombre: expectedName });
+                snap = await getDocs(q);
+              }
             }
           }
-        }
 
-        if (!snap.empty) {
-          const data = snap.docs[0].data() as any;
+          if (!snap.empty) {
+            const data = snap.docs[0].data() as any;
 
-          // Block pending users — show a waiting screen instead of auto-approving
-          if (data.estado_funcionario === 'pendiente') {
-            setUserProfile({ ...data, _isPending: true });
-            setLoading(false);
-            return;
-          }
+            if (data.estado_funcionario === 'pendiente') {
+              setUserProfile({ ...data, _isPending: true });
+              setLoading(false);
+              return;
+            }
 
-          setUserProfile(data);
-          if (data.institution_id) {
-            const instSnap = await getDoc(doc(db, 'institutions', data.institution_id));
-            if (instSnap.exists()) setInstitutionName(instSnap.data().name || '');
-          }
-          // Auto-redirect on login
-          if (data.role === 'admin' || data.role === 'gerente') {
-            router.push('/admin');
-          } else if (data.role === 'funcionario') {
-            router.push('/funcionarios');
+            setUserProfile(data);
+            if (data.institution_id) {
+              const instSnap = await getDoc(doc(db, 'institutions', data.institution_id));
+              if (instSnap.exists()) setInstitutionName(instSnap.data().name || '');
+            }
+            if (data.role === 'admin' || data.role === 'gerente') {
+              router.push('/admin');
+            } else if (data.role === 'funcionario') {
+              router.push('/funcionarios');
+            }
+          } else {
+            await signOut(auth);
+            setLoginError('Cuenta no registrada. Comuníquese con administración.');
           }
         } else {
-          // If a random user logs in but has no profile, log them out.
-          await signOut(auth);
-          setLoginError('Cuenta no registrada. Comuníquese con administración.');
+          setUserProfile(null);
+          setInstitutionName('');
         }
-      } else {
-        setUserProfile(null);
-        setInstitutionName('');
+        setLoading(false);
+      } catch (err) {
+        handleError(err);
       }
-      setLoading(false);
     });
     return () => unsubscribe();
   }, [router]);
@@ -151,6 +167,7 @@ export default function LandingPage() {
           <div className={styles.spinnerDot} />
         </div>
         <p className={styles.loadingText}>FilApp OS</p>
+        {loadingError && <p className={styles.loadingError}>{loadingError}</p>}
       </div>
     );
   }

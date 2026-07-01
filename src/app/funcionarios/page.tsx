@@ -168,19 +168,21 @@ export default function StaffPage() {
 
   const fetchFuncionarioData = async (userId: string) => {
     try {
+      // Clean up any previous listeners before setting up new ones
+      unsubQueueRef.current?.();
+      unsubActivoRef.current?.();
+
       const q = query(collection(db, 'especialistas'), where('user_id', '==', userId));
       unsubProfileRef.current = onSnapshot(q, async (querySnapshot) => {
         if (!querySnapshot.empty) {
           const specDoc = querySnapshot.docs[0];
           const specData = { id: specDoc.id, ...specDoc.data() } as Funcionario;
 
-          // Block non-funcionarios — redirect to /admin (NO signOut, they may be valid admin)
           if (specData.role && specData.role !== 'funcionario') {
             router.replace('/admin');
             return;
           }
 
-          // Block pending funcionarios — redirect to landing pending screen
           if ((specData as any).estado_funcionario === 'pendiente') {
             router.replace('/');
             return;
@@ -200,7 +202,6 @@ export default function StaffPage() {
           }
           setLoading(false);
         } else {
-          // Profile not found — redirect to landing
           await signOut(auth);
           router.replace('/');
         }
@@ -212,6 +213,10 @@ export default function StaffPage() {
   };
 
   const refreshQueue = async (specId: string, institutionId: string) => {
+    // Clean up previous listeners before setting up new ones
+    unsubQueueRef.current?.();
+    unsubActivoRef.current?.();
+
     const qEspera = query(
       collection(db, 'turnos'),
       where('estado', '==', 'espera'),
@@ -300,6 +305,10 @@ export default function StaffPage() {
     if (socketRef.current) {
       socketRef.current.disconnect();
     }
+    // Clean up all Firestore listeners
+    unsubProfileRef.current?.();
+    unsubQueueRef.current?.();
+    unsubActivoRef.current?.();
     await signOut(auth);
   };
 
@@ -737,9 +746,10 @@ export default function StaffPage() {
   return (
     <div className={styles.dashboardContainer}>
       <header className={styles.topBar}>
+        {/* ── Identity block ─────────────────────────────────────────── */}
         <div className={styles.userInfo}>
           {isEditingAvatar ? (
-            <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+            <div className={styles.avatarEditRow}>
               <input
                 className={styles.editInput}
                 value={newAvatarUrl}
@@ -748,14 +758,15 @@ export default function StaffPage() {
                 autoFocus
               />
               <button className={styles.saveBtn} onClick={handleUpdateAvatar}>Guardar</button>
-              <button className={styles.cancelBtn} onClick={() => setIsEditingAvatar(false)}>X</button>
+              <button className={styles.cancelBtn} onClick={() => setIsEditingAvatar(false)}>✕</button>
             </div>
           ) : (
             <div className={styles.profileCell}>
               <div
                 className={styles.avatarWrapper}
+                data-status={funcionario?.estado_funcionario || 'inactivo'}
                 onClick={() => { setNewAvatarUrl(funcionario?.avatar_url || ''); setIsEditingAvatar(true); }}
-                title="Cambiar Foto"
+                title="Cambiar foto"
               >
                 {funcionario?.avatar_url ? (
                   <img src={funcionario.avatar_url} alt="Avatar" className={styles.avatarImg} />
@@ -768,68 +779,75 @@ export default function StaffPage() {
               <span
                 className={styles.statusDot}
                 data-status={funcionario?.estado_funcionario || 'inactivo'}
-                title={`Estado: ${funcionario?.estado_funcionario || 'inactivo'} (Click para alternar)`}
+                title={`Estado: ${funcionario?.estado_funcionario || 'inactivo'} (click para alternar)`}
                 onClick={toggleEstadoFuncionario}
-                style={{ cursor: 'pointer' }}
               />
             </div>
           )}
 
-          <div>
-            <strong style={{ fontSize: '1.2rem', display: 'block', marginBottom: '0.2rem', color: 'var(--text-primary)' }}>Buen día colega funcionario</strong>
-            <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+          <div className={styles.identityText}>
+            <span className={styles.greeting}>Buen día,</span>
+            <strong className={styles.userName}>{funcionario?.nombre || 'Funcionario'}</strong>
+            <div className={styles.metaChips}>
+              {funcionario?.cargo && <span className={styles.chip}>{funcionario.cargo}</span>}
+              {funcionario?.departamento && <span className={styles.chip} data-variant="dept">{funcionario.departamento}</span>}
               {isEditingLetra ? (
-                <>
+                <span className={styles.moduleEditRow}>
                   <input
-                    className={styles.editInput}
+                    className={styles.editInputSm}
                     value={newLetra}
                     onChange={e => setNewLetra(e.target.value)}
-                    placeholder="Nuevo módulo"
+                    placeholder="Módulo"
                     autoFocus
                   />
-                  <button className={styles.saveBtn} onClick={handleUpdateLetra}>Guardar</button>
-                  <button className={styles.cancelBtn} onClick={() => setIsEditingLetra(false)}>X</button>
-                </>
+                  <button className={styles.saveBtn} onClick={handleUpdateLetra}>OK</button>
+                  <button className={styles.cancelBtn} onClick={() => setIsEditingLetra(false)}>✕</button>
+                </span>
               ) : (
-                <>
-                  <strong>{funcionario?.nombre} - Módulo {funcionario?.letra_atencion}</strong>
-                  <button
-                    className={styles.editBtn}
-                    onClick={() => { setNewLetra(funcionario?.letra_atencion || ''); setIsEditingLetra(true); }}
-                  >
-                    Editar
-                  </button>
-                </>
+                <button
+                  className={styles.chipModule}
+                  onClick={() => { setNewLetra(funcionario?.letra_atencion || ''); setIsEditingLetra(true); }}
+                  title="Editar módulo"
+                >
+                  Módulo {funcionario?.letra_atencion || '—'}
+                  <span className={styles.chipEditIcon}>✎</span>
+                </button>
               )}
             </div>
-            <span>{funcionario?.cargo ? `${funcionario.cargo} en ` : ''}{funcionario?.departamento} | {session?.email}</span>
+            <span className={styles.userEmail}>{session?.email}</span>
           </div>
         </div>
+
+        {/* ── Actions block ──────────────────────────────────────────── */}
         <div className={styles.headerActions}>
-          <button 
-            onClick={() => setActiveTab('atencion')} 
-            className={activeTab === 'atencion' ? styles.tabBtnActive : styles.tabBtn}
-          >
-            <Megaphone size={18} /> Atención
-          </button>
-          <button 
-            onClick={() => setActiveTab('directorio')} 
-            className={activeTab === 'directorio' ? styles.tabBtnActive : styles.tabBtn}
-          >
-            <Users size={18} /> Base de Datos
-          </button>
-          
+          <div className={styles.tabGroup}>
+            <button
+              onClick={() => setActiveTab('atencion')}
+              className={activeTab === 'atencion' ? styles.tabBtnActive : styles.tabBtn}
+            >
+              <Megaphone size={17} /> Atención
+            </button>
+            <button
+              onClick={() => setActiveTab('directorio')}
+              className={activeTab === 'directorio' ? styles.tabBtnActive : styles.tabBtn}
+            >
+              <Users size={17} /> Base de Datos
+            </button>
+          </div>
+
+          <div className={styles.actionDivider} />
+
           {notifications.length > 0 && (
-            <div className={styles.notificationArea}>
+            <div className={styles.notificationArea} title={`${notifications.length} notificaciones`}>
               <BellRing size={18} className={styles.notificationBell} />
               <span className={styles.notificationCount}>{notifications.length}</span>
             </div>
           )}
           <button onClick={handleExportMyHistory} className={styles.exportBtn} title="Descargar mi historial">
-            <Download size={18} /> Exportar
+            <Download size={17} /> <span className={styles.btnLabel}>Exportar</span>
           </button>
-          <button onClick={handleLogout} className={styles.logoutBtn}>
-            <LogOut size={18} /> Salir
+          <button onClick={handleLogout} className={styles.logoutBtn} title="Cerrar sesión">
+            <LogOut size={17} /> <span className={styles.btnLabel}>Salir</span>
           </button>
         </div>
       </header>

@@ -145,16 +145,21 @@ export default function AdminPage() {
 
   /* ── Data loaders ─────────────────────────────────────────────────────────── */
   const loadDashboard = async (uid: string, role: string, profile?: any) => {
-    const adminSnap = await getDocs(query(collection(db, 'especialistas'), where('role', '==', 'admin')));
-    setAllAdmins(adminSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-    if (role === 'gerente') {
-      const snap = await getDocs(collection(db, 'institutions'));
-      setInstitutions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } else {
-      const snap = await getDocs(query(collection(db, 'institutions'), where('owner_id', '==', uid)));
-      const ownInsts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setInstitutions(ownInsts);
-      if (ownInsts.length > 0) await openDetail(ownInsts[0].id);
+    try {
+      const adminSnap = await getDocs(query(collection(db, 'especialistas'), where('role', '==', 'admin')));
+      setAllAdmins(adminSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      if (role === 'gerente') {
+        const snap = await getDocs(collection(db, 'institutions'));
+        setInstitutions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } else {
+        const snap = await getDocs(query(collection(db, 'institutions'), where('owner_id', '==', uid)));
+        const ownInsts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setInstitutions(ownInsts);
+        if (ownInsts.length > 0) await openDetail(ownInsts[0].id);
+      }
+    } catch (err) {
+      console.error('Error loading dashboard:', err);
+      alert('Error al cargar datos del panel.');
     }
   };
 
@@ -278,23 +283,28 @@ export default function AdminPage() {
 
   const openDetail = async (instId: string) => {
     setLoading(true);
-    const snap = await getDoc(doc(db, 'institutions', instId));
-    if (snap.exists()) {
-      const d = snap.data();
-      setInstitutionId(instId);
-      setInstitutionName(d.name || '');
-      setTvName(d.config?.tv_name || d.name || '');
-      setLogoUrl(d.config?.logo_url || '');
-      setTvColor(d.config?.tv_primary_color || '#3b82f6');
-      setTvBg(d.config?.tv_background_url || '');
-      setMensajeDia(d.config?.mensaje_dia || '');
-      setDeptosStr((d.config?.departamentos || ['OIRS', 'Atención General']).join(', '));
-      setOirsDpto(d.config?.oirs_departamento || 'OIRS');
-      setWebhookUrl(d.config?.n8n_webhook_url || '');
-      setResetLogs(d.reset_logs || []);
-      await loadFuncionarios(instId);
-      setView('detail');
-      setActiveTab('dashboard');
+    try {
+      const snap = await getDoc(doc(db, 'institutions', instId));
+      if (snap.exists()) {
+        const d = snap.data();
+        setInstitutionId(instId);
+        setInstitutionName(d.name || '');
+        setTvName(d.config?.tv_name || d.name || '');
+        setLogoUrl(d.config?.logo_url || '');
+        setTvColor(d.config?.tv_primary_color || '#3b82f6');
+        setTvBg(d.config?.tv_background_url || '');
+        setMensajeDia(d.config?.mensaje_dia || '');
+        setDeptosStr((d.config?.departamentos || ['OIRS', 'Atención General']).join(', '));
+        setOirsDpto(d.config?.oirs_departamento || 'OIRS');
+        setWebhookUrl(d.config?.n8n_webhook_url || '');
+        setResetLogs(d.reset_logs || []);
+        await loadFuncionarios(instId);
+        setView('detail');
+        setActiveTab('dashboard');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error al cargar la institución.');
     }
     setLoading(false);
   };
@@ -334,6 +344,11 @@ export default function AdminPage() {
   const handleRegisterUser = async (e: React.FormEvent, role: 'admin' | 'funcionario') => {
     e.preventDefault();
     setFuncLoading(true); setFuncMsg('');
+    if (role === 'funcionario' && !institutionId) {
+      setFuncMsg('❌ Error: No hay una institución seleccionada. Selecciona o crea una institución primero.');
+      setFuncLoading(false);
+      return;
+    }
     try {
       const newUid = await createUserSecondary(funcEmail, funcPass);
       const assignedInstId = role === 'funcionario' ? (institutionId || '') : (funcInstId || '');
@@ -364,7 +379,16 @@ export default function AdminPage() {
       if (role === 'funcionario' && institutionId) await loadFuncionarios(institutionId);
       else await loadDashboard(userProfile.user_id, userProfile.role);
     } catch (err: any) {
-      setFuncMsg(`❌ Error: ${err.message}`);
+      const code = err.code;
+      if (code === 'auth/email-already-in-use') {
+        setFuncMsg('❌ Ese correo ya está registrado en el sistema. Si es un reintento, elimina el usuario en Firebase Console (Authentication → Usuarios) y vuelve a intentar.');
+      } else if (code === 'auth/weak-password') {
+        setFuncMsg('❌ La contraseña debe tener al menos 6 caracteres.');
+      } else if (code === 'auth/invalid-email') {
+        setFuncMsg('❌ El correo electrónico no es válido.');
+      } else {
+        setFuncMsg(`❌ Error: ${err.message}`);
+      }
     }
     setFuncLoading(false);
   };
@@ -972,7 +996,7 @@ export default function AdminPage() {
                   <div className={styles.pendingSection}>
                     <div className={styles.pendingSectionHeader}>
                       <AlertTriangle size={18} />
-                      <h3>Pendientes de Aprobación ({pendingFuncionarios.length})</h3>
+                      <h3>Pendientes de Aprobación — {institutionName} ({pendingFuncionarios.length})</h3>
                     </div>
                     <div className={styles.tableWrap}>
                       <table className={styles.table}>
@@ -1020,6 +1044,9 @@ export default function AdminPage() {
                     <UserPlus size={18} className={styles.cardHeadIcon} />
                     <h2>Registrar Funcionario</h2>
                   </div>
+                  <p className={styles.cardDesc}>
+                    Institución: <strong>{institutionName}</strong>
+                  </p>
                   <form onSubmit={e => handleRegisterUser(e, 'funcionario')} className={styles.userForm}>
                     {funcMsg && <div className={funcMsg.startsWith('✅') ? styles.msgSuccess : styles.msgError}>{funcMsg}</div>}
                     <div className={styles.formRow}>

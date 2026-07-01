@@ -84,7 +84,7 @@ export default function RegisterPage() {
       });
       setDone(true);
     } catch (err: any) {
-      if (err.code === 'auth/email-already-in-use') setError('Ese correo ya está registrado. Inicia sesión desde la página principal.');
+      if (err.code === 'auth/email-already-in-use') setError('Ese correo ya está registrado en el sistema. Si ya tienes cuenta, inicia sesión desde la página principal. Si necesitas reutilizar este correo, solicita al administrador que elimine la cuenta anterior en Firebase Console.');
       else if (err.code === 'auth/weak-password') setError('La contraseña debe tener al menos 6 caracteres.');
       else setError(err.message || 'Error al registrar. Intenta de nuevo.');
     }
@@ -113,7 +113,7 @@ export default function RegisterPage() {
       });
       setDone(true);
     } catch (err: any) {
-      if (err.code === 'auth/email-already-in-use') setError('Ese correo ya está registrado.');
+      if (err.code === 'auth/email-already-in-use') setError('Ese correo ya está registrado en el sistema. Si ya tienes cuenta, inicia sesión. Si necesitas reutilizar este correo, solicita al administrador que elimine la cuenta anterior en Firebase Console.');
       else if (err.code === 'auth/weak-password') setError('La contraseña debe tener al menos 6 caracteres.');
       else setError(err.message || 'Error al registrar.');
     }

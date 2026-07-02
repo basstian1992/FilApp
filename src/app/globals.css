@@ -1,11 +1,27 @@
 :root {
   /* Premium Expert Light Mode */
   --bg-color: #f8fafc;
+  --tv-bg-deepest: #f1f5f9;
+  --tv-bg-dark: #ffffff;
+  --tv-bg-medium: #e2e8f0;
+  --tv-bg-card: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+  --tv-text-primary: #0f172a;
+  --tv-text-secondary: #334155;
+  --tv-text-muted: #64748b;
+  --tv-text-dim: #94a3b8;
+  --tv-border: rgba(0, 0, 0, 0.06);
+  --tv-border-strong: rgba(0, 0, 0, 0.1);
+  --tv-header-bg: rgba(255, 255, 255, 0.85);
+  --tv-glass-bg: rgba(255, 255, 255, 0.6);
+  --tv-glass-bg-strong: rgba(255, 255, 255, 0.5);
+  --tv-footer-bg: #e2e8f0;
+  --tv-logo-grad: linear-gradient(to right, var(--tv-primary, #2563eb), #7c3aed);
+  --tv-call-grad: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
   --surface-color: rgba(255, 255, 255, 0.85);
   --surface-hover: rgba(255, 255, 255, 1);
   --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-tertiary: #64748b;
+  --text-secondary: #334155;
+  --text-tertiary: #475569;
   --border-color: rgba(148, 163, 184, 0.2);
   
   /* Vibrant Accents */
@@ -51,6 +67,22 @@
 [data-theme="dark"] {
   /* Premium Expert Dark Mode */
   --bg-color: #020617;
+  --tv-bg-deepest: #020617;
+  --tv-bg-dark: #0f172a;
+  --tv-bg-medium: #1e293b;
+  --tv-bg-card: linear-gradient(145deg, #0f172a 0%, #1e293b 100%);
+  --tv-text-primary: #f8fafc;
+  --tv-text-secondary: rgba(255, 255, 255, 0.7);
+  --tv-text-muted: rgba(255, 255, 255, 0.4);
+  --tv-text-dim: rgba(255, 255, 255, 0.05);
+  --tv-border: rgba(255, 255, 255, 0.05);
+  --tv-border-strong: rgba(255, 255, 255, 0.08);
+  --tv-header-bg: rgba(2, 6, 23, 0.85);
+  --tv-glass-bg: rgba(15, 23, 42, 0.6);
+  --tv-glass-bg-strong: rgba(15, 23, 42, 0.5);
+  --tv-footer-bg: #0f172a;
+  --tv-logo-grad: linear-gradient(to right, var(--tv-primary, #60a5fa), #c084fc);
+  --tv-call-grad: linear-gradient(180deg, #ffffff 0%, #cbd5e1 100%);
   --surface-color: rgba(30, 41, 59, 0.5);
   --surface-hover: rgba(30, 41, 59, 0.8);
   --text-primary: #f8fafc;
@@ -151,4 +183,14 @@ input, select, textarea {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.7);
+}
+
+/* Skeleton animations */
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes skeletonSpin {
+  to { transform: rotate(360deg); }
 }

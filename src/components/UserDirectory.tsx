@@ -4,8 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import { db } from '@/lib/firebase/client';
 import { collection, query, where, getDocs, setDoc, doc, getDoc } from 'firebase/firestore';
 import { UserData } from './UserForm';
-import { Search, Download, Upload, Edit, Save, X } from 'lucide-react';
+import { Search, Download, Upload, Edit, Save, X, FileSpreadsheet } from 'lucide-react';
 import UserForm from './UserForm';
+import { useToast } from '@/components/Toast';
+import * as XLSX from 'xlsx';
 
 interface UserDirectoryProps {
   institutionId: string;
@@ -15,6 +17,7 @@ interface UserDirectoryProps {
 }
 
 export default function UserDirectory({ institutionId, funcionarioId, funcionarioName, role = 'funcionario' }: UserDirectoryProps) {
+  const { toast } = useToast();
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,11 +44,10 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
 
   const handleExport = () => {
     if (users.length === 0) {
-      alert('No hay usuarios para exportar.');
+      toast('No hay usuarios para exportar.', 'warning');
       return;
     }
-    
-    // Ordered columns for Export
+
     const orderedKeys = [
       'id_ficha', 'rut', 'nacionalidad', 'nombre_completo', 'telefono', 'correo', 'region', 'provincia', 'comuna', 'direccion', 
       'ocupacion', 'discapacidad', 'enfermedad_base', 'funcionarios_atienden', 'nivel_educacional', 'intereses_usuario', 'derivado',
@@ -80,6 +82,32 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
     document.body.removeChild(link);
   };
 
+  const handleExportXLSX = () => {
+    if (users.length === 0) {
+      toast('No hay usuarios para exportar.', 'warning');
+      return;
+    }
+
+    const orderedKeys = [
+      'id_ficha', 'rut', 'nacionalidad', 'nombre_completo', 'telefono', 'correo', 'region', 'provincia', 'comuna', 'direccion', 
+      'ocupacion', 'discapacidad', 'enfermedad_base', 'funcionarios_atienden', 'nivel_educacional', 'intereses_usuario', 'derivado',
+      'prevision_salud', 'prevision_social', 'percapitado', 
+      'programa_asiste', 'rsh', 'beneficios_asignados', 'observacion_relevante', 'otro_dato',
+      'last_modified_by_name', 'last_modified_at'
+    ];
+
+    const data = users.map(row => {
+      const obj: Record<string, any> = {};
+      orderedKeys.forEach(k => { obj[k] = (row as any)[k] || ''; });
+      return obj;
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Usuarios');
+    XLSX.writeFile(wb, `usuarios_${institutionId}.xlsx`);
+  };
+
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -90,15 +118,45 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
     }
 
     setLoading(true);
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const text = event.target?.result as string;
-        // Normalize line endings
+    const isXLSX = file.name.endsWith('.xlsx');
+
+    try {
+      const buffer = await file.arrayBuffer();
+
+      if (isXLSX) {
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData: Record<string, string>[] = XLSX.utils.sheet_to_json(firstSheet);
+        if (jsonData.length === 0) throw new Error('El archivo Excel está vacío.');
+
+        const headers = Object.keys(jsonData[0]);
+        if (!headers.includes('rut')) throw new Error("El archivo debe contener una columna 'rut'.");
+
+        let successCount = 0;
+        for (const row of jsonData) {
+          const rut = (row.rut || '').trim();
+          if (!rut) continue;
+
+          const docData: any = {
+            institution_id: institutionId,
+            last_modified_by_id: funcionarioId,
+            last_modified_by_name: funcionarioName,
+            last_modified_at: new Date().toISOString()
+          };
+          headers.forEach(h => {
+            if (h !== 'rut') docData[h] = (row[h] || '').toString().trim();
+          });
+          await setDoc(doc(db, 'usuarios', rut), docData, { merge: true });
+          successCount++;
+        }
+
+        toast(`${successCount} usuarios procesados.`);
+      } else {
+        // CSV import (existing logic)
+        const text = new TextDecoder('UTF-8').decode(buffer);
         const rows = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
         if (rows.length < 2) throw new Error('CSV vacío o sin datos');
 
-        // Parse header — separator is ALWAYS semicolon (;) to match export
         const sep = ';';
         const headers = rows[0].split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
 
@@ -111,7 +169,6 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
           const row = rows[i].trim();
           if (!row) continue;
 
-          // CSV parser — semicolon separator with double-quote escaping
           const cols: string[] = [];
           let inQuotes = false;
           let currentVal = '';
@@ -125,7 +182,7 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
               currentVal += char;
             }
           }
-          cols.push(currentVal.trim()); // last column
+          cols.push(currentVal.trim());
 
           const rut = cols[rutIndex]?.replace(/^"|"$/g, '').trim();
           if (!rut) continue;
@@ -139,7 +196,6 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
 
           headers.forEach((h, index) => {
             if (h !== 'rut' && h !== 'last_modified_by_id' && cols[index] !== undefined) {
-              // Strip surrounding quotes from values
               docData[h] = cols[index].replace(/^"|"$/g, '').trim();
             }
           });
@@ -148,16 +204,14 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
           successCount++;
         }
 
-        alert(`✅ Importación completada.\n${successCount} usuarios procesados.`);
-        fetchUsers();
-      } catch (err: any) {
-        console.error(err);
-        alert('❌ Error al importar:\n' + err.message);
+        toast(`${successCount} usuarios procesados.`);
       }
-      setLoading(false);
-    };
-    // Read as UTF-8 to handle special characters (ñ, á, etc.)
-    reader.readAsText(file, 'UTF-8');
+      fetchUsers();
+    } catch (err: any) {
+      console.error(err);
+      toast('Error al importar: ' + err.message, 'error');
+    }
+    setLoading(false);
     e.target.value = '';
   };
 
@@ -173,14 +227,17 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
         <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>Directorio de Pacientes</h2>
         
         <div style={{ display: 'flex', gap: '1rem' }}>
-          <button onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer' }}>
-            <Download size={16} /> Descargar (CSV)
+          <button onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'var(--surface-color)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer' }}>
+            <Download size={16} /> CSV
+          </button>
+          <button onClick={handleExportXLSX} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'var(--surface-color)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer' }}>
+            <FileSpreadsheet size={16} /> Excel
           </button>
           
-          <button onClick={() => fileInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer' }}>
-            <Upload size={16} /> Importar (CSV)
+          <button onClick={() => fileInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'var(--surface-color)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer' }}>
+            <Upload size={16} /> Importar
           </button>
-          <input type="file" accept=".csv" ref={fileInputRef} style={{ display: 'none' }} onChange={handleImport} />
+          <input type="file" accept=".csv,.xlsx" ref={fileInputRef} style={{ display: 'none' }} onChange={handleImport} />
         </div>
       </div>
 
@@ -191,7 +248,7 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
           placeholder="Buscar por RUT o Nombre..." 
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
-          style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--surface-hover)', color: 'white' }}
+          style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--surface-hover)', color: 'var(--text-primary)' }}
         />
       </div>
 
@@ -238,7 +295,7 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
                     <tr key={u.rut} style={{ borderBottom: '1px solid var(--border-color)' }}>
                       <td style={{ padding: '1rem', color: 'var(--primary-color)' }}>{u.id_ficha || '-'}</td>
                       <td style={{ padding: '1rem', color: 'var(--text-primary)' }}>{u.rut}</td>
-                      <td style={{ padding: '1rem', color: 'white' }}>{u.nombre_completo || 'Sin nombre'}</td>
+                      <td style={{ padding: '1rem', color: 'var(--text-primary)' }}>{u.nombre_completo || 'Sin nombre'}</td>
                       <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>{u.telefono || '-'}</td>
                       <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>{u.comuna || '-'}</td>
                       <td style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>

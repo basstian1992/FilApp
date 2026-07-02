@@ -33,6 +33,8 @@ import styles from './funcionarios.module.css';
 import { LogOut, User, CheckCircle, SkipForward, Megaphone, Download, BellRing, Users } from 'lucide-react';
 import UserForm from '@/components/UserForm';
 import UserDirectory from '@/components/UserDirectory';
+import { useToast } from '@/components/Toast';
+import { SkeletonScreen } from '@/components/Skeleton';
 
 interface Funcionario {
   id: string;
@@ -69,6 +71,7 @@ interface Notification {
 
 export default function StaffPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState('');
@@ -138,6 +141,21 @@ export default function StaffPage() {
     }
   }, [funcionario?.institution_id]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsEditingLetra(false);
+        setIsEditingAvatar(false);
+      }
+      if ((e.key === 'Enter' || e.key === ' ') && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'SELECT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        llamarSiguiente();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const connectSocket = (institutionId: string, funcionarioUserId: string) => {
     const initSocket = async () => {
       try {
@@ -189,6 +207,7 @@ export default function StaffPage() {
           }
 
           setFuncionario(specData);
+          funcionarioRef.current = specData;
           setWhatsappPhone(specData.whatsapp_phone || '');
           setWhatsappApiKey(specData.whatsapp_apikey || '');
 
@@ -252,11 +271,17 @@ export default function StaffPage() {
                 const priorityTag = newTurno.is_appointment ? '🔔 *ALTA PRIORIDAD* ' : '';
                 const msg = `${priorityTag}🔔 *FilApp - Nuevo Turno*\nSe ha solicitado un nuevo turno en tu módulo de *${deptoStr}*.\n🎫 *Turno:* ${ticketStr}\n👥 *Personas en cola:* ${queueCount}\nIngresa al panel para atender.`;
 
-                const encodedMsg = encodeURIComponent(msg);
-                const encodedPhone = encodeURIComponent(currentFunc.whatsapp_phone.replace(/[^0-9+]/g, ''));
-                const url = `https://api.callmebot.com/whatsapp.php?phone=${encodedPhone}&text=${encodedMsg}&apikey=${currentFunc.whatsapp_apikey.trim()}`;
-
-                fetch(url, { mode: 'no-cors' }).catch(err => console.error('Error al enviar WhatsApp:', err));
+                fetch('/api/whatsapp', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    phone: currentFunc.whatsapp_phone,
+                    message: msg,
+                    apikey: currentFunc.whatsapp_apikey.trim()
+                  })
+                }).then(r => r.json()).then(d => {
+                  if (!d.success) console.error('WhatsApp error:', d.error);
+                }).catch(err => console.error('Error al enviar WhatsApp:', err));
               }
             }
           }
@@ -321,7 +346,7 @@ export default function StaffPage() {
       setIsEditingLetra(false);
     } catch (e) {
       console.error(e);
-      alert('Error al actualizar módulo');
+      toast('Error al actualizar módulo', 'error');
     }
     setLoading(false);
   };
@@ -335,7 +360,7 @@ export default function StaffPage() {
       setIsEditingAvatar(false);
     } catch (e) {
       console.error(e);
-      alert('Error al actualizar avatar');
+      toast('Error al actualizar avatar', 'error');
     }
     setLoading(false);
   };
@@ -354,11 +379,17 @@ export default function StaffPage() {
     const testMsg = `📲 *¡FilApp Conectado!*\nHola *${funcionario.nombre}*, tu WhatsApp se ha vinculado correctamente a FilApp.\nRecibirás una notificación en este chat cada vez que ingresen turnos en espera para *${funcionario.departamento}*.\n_Este servicio estará activo mientras mantengas tu panel abierto._`;
 
     try {
-      const encodedMsg = encodeURIComponent(testMsg);
-      const encodedPhone = encodeURIComponent(cleanPhone.replace(/[^0-9+]/g, ''));
-      const url = `https://api.callmebot.com/whatsapp.php?phone=${encodedPhone}&text=${encodedMsg}&apikey=${cleanKey}`;
-
-      await fetch(url, { mode: 'no-cors' });
+      const res = await fetch('/api/whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: cleanPhone,
+          message: testMsg,
+          apikey: cleanKey
+        })
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error || 'Error al enviar mensaje de prueba');
 
       await updateDoc(doc(db, 'especialistas', funcionario.id), {
         whatsapp_phone: cleanPhone,
@@ -402,7 +433,7 @@ export default function StaffPage() {
       setTestError('');
     } catch (err) {
       console.error('Error al desvincular WhatsApp:', err);
-      alert('Error al desvincular.');
+      toast('Error al desvincular.', 'error');
     } finally {
       setIsSavingWhatsapp(false);
     }
@@ -412,11 +443,11 @@ export default function StaffPage() {
     if (!manualRut || !funcionario) return;
     const formattedRut = formatRutUI(manualRut);
     if (!validateRUT(formattedRut)) {
-      alert("RUT Inválido.");
+      toast("RUT Inválido.", 'warning');
       return;
     }
     if (currentTurno) {
-      alert("Finaliza la atención actual primero.");
+      toast("Finaliza la atención actual primero.", 'warning');
       return;
     }
     setLoading(true);
@@ -503,7 +534,7 @@ export default function StaffPage() {
 
     } catch (err) {
       console.error("Error manual:", err);
-      alert("Error al generar turno manual.");
+      toast("Error al generar turno manual.", 'error');
     }
     setLoading(false);
   };
@@ -513,7 +544,7 @@ export default function StaffPage() {
     setLoading(true);
 
     if (currentTurno) {
-      alert("Debes finalizar el turno actual primero.");
+      toast("Debes finalizar el turno actual primero.", 'warning');
       setLoading(false);
       return;
     }
@@ -531,7 +562,7 @@ export default function StaffPage() {
     );
 
     if (esperaDocs.length === 0) {
-      alert("No hay pacientes en espera para " + funcionario.departamento);
+      toast("No hay pacientes en espera para " + funcionario.departamento, 'warning');
       setLoading(false);
       return;
     }
@@ -572,7 +603,7 @@ export default function StaffPage() {
 
     } catch (e) {
       console.error("Error al llamar siguiente:", e);
-      alert("Hubo un error al llamar al paciente. Revise consola.");
+      toast("Hubo un error al llamar al paciente. Revise consola.", 'error');
     }
     setLoading(false);
   };
@@ -624,7 +655,7 @@ export default function StaffPage() {
       setFuncionario({ ...funcionario, estado_funcionario: nuevoEstado });
     } catch (err) {
       console.error(err);
-      alert('Error al cambiar estado.');
+      toast('Error al cambiar estado.', 'error');
     }
   };
 
@@ -652,17 +683,17 @@ export default function StaffPage() {
           reset_logs: updatedLogs
         });
         
-        alert("El conteo se ha reiniciado correctamente.");
+        toast("El conteo se ha reiniciado correctamente.");
       }
     } catch (e) {
       console.error(e);
-      alert("Error al reiniciar conteo");
+      toast("Error al reiniciar conteo", 'error');
     }
   };
 
   const exportToCSV = (filename: string, rows: any[]) => {
     if (!rows || !rows.length) {
-      alert("No hay datos para exportar");
+      toast("No hay datos para exportar", 'warning');
       return;
     }
     const separator = ';';
@@ -719,7 +750,7 @@ export default function StaffPage() {
       exportToCSV(`atenciones_${funcionario.nombre.replace(/\s+/g, '_')}.csv`, data);
     } catch (e) {
       console.error(e);
-      alert("Error al exportar");
+      toast("Error al exportar", 'error');
     }
     setLoading(false);
   };
@@ -727,12 +758,7 @@ export default function StaffPage() {
   const queueCount = queueDocs.filter(d => d.departamento_solicitado === funcionario?.departamento).length;
 
   if (loading) {
-    return (
-      <div className={styles.centerLoad}>
-        <div style={{ width: 36, height: 36, border: '3px solid var(--border-color)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-        Cargando panel…
-      </div>
-    );
+    return <SkeletonScreen />;
   }
 
   if (authError) {
@@ -843,9 +869,6 @@ export default function StaffPage() {
               <span className={styles.notificationCount}>{notifications.length}</span>
             </div>
           )}
-          <button onClick={handleExportMyHistory} className={styles.exportBtn} title="Descargar mi historial">
-            <Download size={17} /> <span className={styles.btnLabel}>Exportar</span>
-          </button>
           <button onClick={handleLogout} className={styles.logoutBtn} title="Cerrar sesión">
             <LogOut size={17} /> <span className={styles.btnLabel}>Salir</span>
           </button>

@@ -311,7 +311,7 @@ function TotemInner() {
           )}
 
           <p className={styles.autoCloseText}>Esta pantalla se cerrará automáticamente...</p>
-          <button className={styles.primaryBtn} onClick={resetFlow}>
+          <button type="button" className={styles.primaryBtn} onClick={resetFlow}>
             Nuevo Turno
           </button>
         </div>
@@ -327,17 +327,17 @@ function TotemInner() {
           <p className={styles.subtitle}>Seleccione el tipo de atención que necesita</p>
 
           <div className={styles.menuGrid}>
-            <button className={styles.menuBtn} onClick={() => handleModeSelect('general')}>
+            <button type="button" className={styles.menuBtn} onClick={() => handleModeSelect('general')}>
               <span className={styles.menuIcon}>&#x1F4CB;</span>
               <span className={styles.menuLabel}>Atención General</span>
               <span className={styles.menuDesc}>Orden de llegada</span>
             </button>
-            <button className={`${styles.menuBtn} ${styles.menuOirs}`} onClick={() => handleModeSelect('oirs')}>
+            <button type="button" className={`${styles.menuBtn} ${styles.menuOirs}`} onClick={() => handleModeSelect('oirs')}>
               <span className={styles.menuIcon}>&#x1F4AC;</span>
               <span className={styles.menuLabel}>Orientación de Trámites</span>
               <span className={styles.menuDesc}>Consultas rápidas (OIRS)</span>
             </button>
-            <button className={`${styles.menuBtn} ${styles.menuAppointment}`} onClick={() => handleModeSelect('appointment')}>
+            <button type="button" className={`${styles.menuBtn} ${styles.menuAppointment}`} onClick={() => handleModeSelect('appointment')}>
               <span className={styles.menuIcon}>&#x1F4C5;</span>
               <span className={styles.menuLabel}>Hora Agendada</span>
               <span className={styles.menuDesc}>Tengo una cita programada</span>
@@ -358,7 +358,7 @@ function TotemInner() {
 
           <div className={styles.deptoGrid}>
             {categories.map(cat => (
-              <button key={cat} className={styles.deptoBtn} onClick={() => handleCategorySelect(cat)}>
+              <button type="button" key={cat} className={styles.deptoBtn} onClick={() => handleCategorySelect(cat)}>
                 {cat}
               </button>
             ))}
@@ -373,13 +373,13 @@ function TotemInner() {
     return (
       <main className={styles.container}>
         <div className={styles.glassPanel}>
-          <button className={styles.backBtn} onClick={resetFlow}>← Volver</button>
+          <button type="button" className={styles.backBtn} onClick={resetFlow}>← Volver</button>
           <h1 className={styles.title}>Hora Agendada</h1>
           <p className={styles.subtitle}>Seleccione categoría donde se dirige</p>
 
           <div className={styles.deptoGrid}>
             {categories.map(cat => (
-              <button key={cat} className={styles.deptoBtn} onClick={() => handleAppointmentCategorySelect(cat)}>
+              <button type="button" key={cat} className={styles.deptoBtn} onClick={() => handleAppointmentCategorySelect(cat)}>
                 <strong>{cat}</strong>
               </button>
             ))}
@@ -394,18 +394,18 @@ function TotemInner() {
     return (
       <main className={styles.container}>
         <div className={styles.glassPanel}>
-          <button className={styles.backBtn} onClick={() => setScreen('appointment')}>← Volver</button>
+          <button type="button" className={styles.backBtn} onClick={() => setScreen('appointment')}>← Volver</button>
           <h1 className={styles.title}>Hora Agendada - {selectedCategory}</h1>
           <p className={styles.subtitle}>Seleccione el funcionario con quien tiene la cita</p>
 
           <div className={styles.deptoGrid}>
             {matchingFuncs.map(f => (
-              <button key={f.id} className={styles.deptoBtn} onClick={() => handleFuncionarioSelect(f)}>
+              <button type="button" key={f.id} className={styles.deptoBtn} onClick={() => handleFuncionarioSelect(f)}>
                 <strong>{f.nombre}</strong>
                 <small style={{ display: 'block', fontSize: '0.8rem', opacity: 0.7 }}>{f.cargo || f.departamento}</small>
               </button>
             ))}
-            <button className={styles.deptoBtn} style={{ background: 'rgba(255, 255, 255, 0.1)', border: '1px dashed rgba(255,255,255,0.4)' }} onClick={() => {
+            <button type="button" className={styles.deptoBtn} style={{ background: 'rgba(255, 255, 255, 0.1)', border: '1px dashed rgba(255,255,255,0.4)' }} onClick={() => {
               setSelectedFuncionario(null);
               handleSubmit(selectedCategory, null);
             }}>
@@ -421,7 +421,7 @@ function TotemInner() {
   return (
     <main className={styles.container}>
       <div className={styles.glassPanel}>
-        <button className={styles.backBtn} onClick={() => setScreen('menu')}>← Volver</button>
+        <button type="button" className={styles.backBtn} onClick={() => setScreen('menu')}>← Volver</button>
         <h1 className={styles.title}>
           {selectedMode === 'general' ? selectedCategory : selectedMode === 'appointment' ? `Cita con ${selectedFuncionario?.nombre || 'Funcionario'}` : oirsDepartamento}
         </h1>
@@ -437,17 +437,20 @@ function TotemInner() {
             if (val.length <= 10) setRut(val);
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && rut.length >= 8 && !loading) {
-              const formattedRut = formatRutUI(rut);
-              if (!validateRUT(formattedRut)) {
-                setWarningMsg('⚠️ El RUT ingresado no corresponde a un formato chileno válido. Puede continuar si es un documento extranjero.');
-              }
-              if (selectedMode === 'general') {
-                setScreen('categories');
-              } else if (selectedMode === 'appointment') {
-                setScreen('appointment');
-              } else {
-                handleSubmit();
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              if (rut.length >= 8 && !loading) {
+                const formattedRut = formatRutUI(rut);
+                if (!validateRUT(formattedRut)) {
+                  setWarningMsg('⚠️ El RUT ingresado no corresponde a un formato chileno válido. Puede continuar si es un documento extranjero.');
+                }
+                if (selectedMode === 'general') {
+                  setScreen('categories');
+                } else if (selectedMode === 'appointment') {
+                  setScreen('appointment');
+                } else {
+                  handleSubmit();
+                }
               }
             }
           }}
@@ -460,6 +463,7 @@ function TotemInner() {
         <div className={styles.keypad}>
           {['1','2','3','4','5','6','7','8','9','C','0','k','DEL'].map((key) => (
             <button
+              type="button"
               key={key}
               className={`${styles.keyBtn} ${key === 'DEL' ? styles.delBtn : ''} ${key === 'C' ? styles.clearBtn : ''}`}
               onClick={() => handleKeypad(key)}
@@ -469,7 +473,7 @@ function TotemInner() {
           ))}
         </div>
 
-        <button className={styles.primaryBtn} onClick={() => {
+        <button type="button" className={styles.primaryBtn} onClick={() => {
           const formattedRut = formatRutUI(rut);
           if (!validateRUT(formattedRut)) {
             setWarningMsg('⚠️ El RUT ingresado no corresponde a un formato chileno válido. Puede continuar si es un documento extranjero.');
@@ -491,7 +495,7 @@ function TotemInner() {
 
 export default function TotemPage() {
   return (
-    <Suspense fallback={<div className={styles.container}><div className={styles.glassPanel}><p>Cargando...</p></div></div>}>
+    <Suspense fallback={<div className={styles.container}><div className={styles.glassPanel}><div style={{width:'200px',height:'20px',background:'var(--skeleton-base)',borderRadius:'8px',animation:'skeletonPulse 1.5s ease-in-out infinite',margin:'0 auto'}} /></div></div>}>
       <TotemInner />
     </Suspense>
   );

@@ -14,6 +14,7 @@ export const metadata: Metadata = {
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ToastProvider } from "@/components/Toast";
 
 export default function RootLayout({
   children,
@@ -24,8 +25,10 @@ export default function RootLayout({
     <html lang="es" className={inter.variable} suppressHydrationWarning>
       <body>
         <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
-          {children}
-          <ThemeToggle />
+          <ToastProvider>
+            {children}
+            <ThemeToggle />
+          </ToastProvider>
         </ThemeProvider>
       </body>
     </html>

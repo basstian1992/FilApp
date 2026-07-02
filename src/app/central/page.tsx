@@ -7,6 +7,7 @@ import { collection, doc, runTransaction, setDoc, getDoc, addDoc, query, where, 
 import { triggerWebhook } from '@/lib/notify';
 import styles from './central.module.css';
 import { LogOut, UserPlus, Info, CheckCircle, Search } from 'lucide-react';
+import { SkeletonScreen } from '@/components/Skeleton';
 
 export default function CentralPage() {
   const [session, setSession] = useState<any>(null);
@@ -216,7 +217,7 @@ export default function CentralPage() {
   };
 
   if (loading && !session && !authError) {
-    return <div className={styles.centerLoad}>Cargando entorno...</div>;
+    return <SkeletonScreen />;
   }
 
   if (!session) {

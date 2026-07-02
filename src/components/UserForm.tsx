@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase/client';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { regionesChile } from '@/lib/chile-locations';
 import { Save } from 'lucide-react';
+import { useToast } from '@/components/Toast';
 
 export interface UserData {
   id_ficha: string;
@@ -50,6 +51,7 @@ interface UserFormProps {
 }
 
 export default function UserForm({ rut, institutionId, funcionarioId, funcionarioName, onSaved }: UserFormProps) {
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<UserData>({
@@ -144,7 +146,7 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isFormValid()) {
-      alert('Faltan campos obligatorios por llenar.');
+      toast('Faltan campos obligatorios por llenar.', 'warning');
       return;
     }
     setSaving(true);
@@ -160,10 +162,10 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
       // Usamos setDoc con merge para no borrar history_turnos u otros datos base
       await setDoc(docRef, updateData, { merge: true });
       onSaved(true);
-      alert('Datos de usuario registrados correctamente.');
+      toast('Datos de usuario registrados correctamente.');
     } catch (err) {
       console.error(err);
-      alert('Error al guardar datos.');
+      toast('Error al guardar datos.', 'error');
     }
     setSaving(false);
   };
@@ -171,13 +173,13 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
   if (loading) return <div>Cargando perfil del usuario...</div>;
 
   return (
-    <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem', background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '12px' }}>
+    <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem', background: 'var(--surface-color)', padding: '1.5rem', borderRadius: '12px' }}>
       <h3 style={{ margin: 0, color: 'var(--primary-color)' }}>Ficha del Paciente (Obligatorio)</h3>
       
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>ID Ficha *</label>
-          <input name="id_ficha" value={data.id_ficha} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="id_ficha" value={data.id_ficha} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>RUT</label>
@@ -185,32 +187,32 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Nombre Completo *</label>
-          <input name="nombre_completo" value={data.nombre_completo} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="nombre_completo" value={data.nombre_completo} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Nacionalidad *</label>
-          <input name="nacionalidad" value={data.nacionalidad} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="nacionalidad" value={data.nacionalidad} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Región *</label>
-          <select value={data.region} onChange={handleRegionChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--background-color)', color: 'white' }}>
+          <select value={data.region} onChange={handleRegionChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }}>
             <option value="">Seleccione Región</option>
             {regionesChile.map(r => <option key={r.region} value={r.region}>{r.region}</option>)}
           </select>
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Provincia *</label>
-          <select value={data.provincia} onChange={handleProvinciaChange} required disabled={!selectedRegion} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--background-color)', color: 'white' }}>
+          <select value={data.provincia} onChange={handleProvinciaChange} required disabled={!selectedRegion} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }}>
             <option value="">Seleccione Provincia</option>
             {selectedRegion?.provincias.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
           </select>
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Comuna *</label>
-          <select name="comuna" value={data.comuna} onChange={handleChange} required disabled={!selectedProvincia} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--background-color)', color: 'white' }}>
+          <select name="comuna" value={data.comuna} onChange={handleChange} required disabled={!selectedProvincia} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }}>
             <option value="">Seleccione Comuna</option>
             {selectedProvincia?.comunas.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -220,15 +222,15 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Calle y Número *</label>
-          <input name="direccion" value={data.direccion} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="direccion" value={data.direccion} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Teléfono *</label>
-          <input name="telefono" value={data.telefono} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="telefono" value={data.telefono} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Discapacidad *</label>
-          <select name="discapacidad" value={data.discapacidad} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--background-color)', color: 'white' }}>
+          <select name="discapacidad" value={data.discapacidad} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }}>
             <option value="No">No</option>
             <option value="Física">Física</option>
             <option value="Sensorial (Visual/Auditiva)">Sensorial (Visual/Auditiva)</option>
@@ -243,67 +245,67 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Ocupación</label>
-          <input name="ocupacion" value={data.ocupacion} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="ocupacion" value={data.ocupacion} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Nivel Educacional</label>
-          <input name="nivel_educacional" value={data.nivel_educacional} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="nivel_educacional" value={data.nivel_educacional} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Enfermedad Base</label>
-          <input name="enfermedad_base" value={data.enfermedad_base} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="enfermedad_base" value={data.enfermedad_base} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Funcionarios que le atienden</label>
-          <input name="funcionarios_atienden" value={data.funcionarios_atienden} onChange={handleChange} placeholder="Ej: Dr. Pérez, Asistente Gómez" style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="funcionarios_atienden" value={data.funcionarios_atienden} onChange={handleChange} placeholder="Ej: Dr. Pérez, Asistente Gómez" style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Intereses del Usuario</label>
-          <input name="intereses_usuario" value={data.intereses_usuario} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="intereses_usuario" value={data.intereses_usuario} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Derivado</label>
-          <input name="derivado" value={data.derivado} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="derivado" value={data.derivado} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Previsión de Salud</label>
-          <input name="prevision_salud" value={data.prevision_salud} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="prevision_salud" value={data.prevision_salud} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Previsión Social (AFP/INP)</label>
-          <input name="prevision_social" value={data.prevision_social} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="prevision_social" value={data.prevision_social} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Percapitado N°</label>
-          <input name="percapitado" value={data.percapitado} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="percapitado" value={data.percapitado} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Correo Electrónico</label>
-          <input name="correo" type="email" value={data.correo} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="correo" type="email" value={data.correo} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>RSH (Tramo %)</label>
-          <input name="rsh" value={data.rsh} onChange={handleChange} placeholder="Ej: 40%" style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="rsh" value={data.rsh} onChange={handleChange} placeholder="Ej: 40%" style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Programa al que Asiste</label>
-          <input name="programa_asiste" value={data.programa_asiste} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <input name="programa_asiste" value={data.programa_asiste} onChange={handleChange} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Beneficios Asignados y Fecha</label>
-          <textarea name="beneficios_asignados" value={data.beneficios_asignados} onChange={handleChange} rows={2} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white', resize: 'vertical' }} />
+          <textarea name="beneficios_asignados" value={data.beneficios_asignados} onChange={handleChange} rows={2} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)', resize: 'vertical' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Otro Dato</label>
-          <textarea name="otro_dato" value={data.otro_dato} onChange={handleChange} rows={2} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white', resize: 'vertical' }} />
+          <textarea name="otro_dato" value={data.otro_dato} onChange={handleChange} rows={2} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)', resize: 'vertical' }} />
         </div>
         <div>
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Observación Relevante</label>
-          <textarea name="observacion_relevante" value={data.observacion_relevante} onChange={handleChange} rows={2} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'white', resize: 'vertical' }} />
+          <textarea name="observacion_relevante" value={data.observacion_relevante} onChange={handleChange} rows={2} style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)', resize: 'vertical' }} />
         </div>
       </div>
       

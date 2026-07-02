@@ -29,6 +29,7 @@ const VOICE_PRIORITY_PATTERNS = [
   'Microsoft Dalia',
   'Microsoft Pablo',
   'Microsoft Raul',
+  'Microsoft',
   'Google Español',
   'Google español',
   'Google',
@@ -37,6 +38,8 @@ const VOICE_PRIORITY_PATTERNS = [
   'Online',
   'Multilingual Online',
 ];
+
+const LATAM_LANG = /es-(CL|MX|AR|CO|PE|419|US)/;
 
 let _cachedVoices: SpeechSynthesisVoice[] = [];
 let _voiceLoadPromise: Promise<SpeechSynthesisVoice[]> | null = null;
@@ -62,7 +65,7 @@ function ensureVoicesLoaded(): Promise<SpeechSynthesisVoice[]> {
         _cachedVoices = window.speechSynthesis.getVoices();
         resolve(_cachedVoices);
       }
-    }, 1000);
+    }, 3000);
   });
 
   return _voiceLoadPromise;
@@ -77,9 +80,7 @@ function selectBestSpanishVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesis
     if (found) return found;
   }
 
-  const latam = spanish.filter(v =>
-    /es-(CL|MX|AR|CO|PE|419|US)/.test(v.lang)
-  );
+  const latam = spanish.filter(v => LATAM_LANG.test(v.lang));
   if (latam.length > 0) return latam[0];
 
   return spanish[0];
@@ -130,31 +131,43 @@ function TVInner() {
 
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(texto);
-    (window as any).__filapp_utterance = utterance;
-
     const voices = window.speechSynthesis.getVoices();
     const bestVoice = selectBestSpanishVoice(voices);
 
-    if (bestVoice) {
-      utterance.voice = bestVoice;
-      utterance.lang = bestVoice.lang;
-    } else {
-      utterance.lang = 'es-CL';
-    }
+    // Split into sentences for natural pauses
+    const segments = texto.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [texto];
 
-    const wordCount = texto.split(/\s+/).length;
-    if (wordCount > 20) {
-      utterance.rate = 0.95;
-    } else if (wordCount > 8) {
-      utterance.rate = 0.9;
-    } else {
-      utterance.rate = 0.85;
-    }
-    utterance.pitch = 1.0;
-    utterance.volume = 1;
+    let delay = 0;
+    segments.forEach((seg, i) => {
+      const wordCount = seg.trim().split(/\s+/).length;
+      let rate = 0.85;
+      let pitch = 1.0;
+      if (wordCount > 15) {
+        rate = 0.88; pitch = 0.95;
+      } else if (wordCount > 8) {
+        rate = 0.84; pitch = 1.0;
+      } else if (wordCount > 3) {
+        rate = 0.8; pitch = 1.05;
+      } else {
+        rate = 0.75; pitch = 1.1;
+      }
 
-    window.speechSynthesis.speak(utterance);
+      setTimeout(() => {
+        const utterance = new SpeechSynthesisUtterance(seg.trim());
+        if (bestVoice) {
+          utterance.voice = bestVoice;
+          utterance.lang = bestVoice.lang;
+        } else {
+          utterance.lang = 'es-CL';
+        }
+        utterance.rate = rate;
+        utterance.pitch = pitch;
+        utterance.volume = 1;
+        window.speechSynthesis.speak(utterance);
+      }, delay);
+
+      delay += Math.max(400, wordCount * 120);
+    });
   }, []);
 
   useEffect(() => {
@@ -195,12 +208,16 @@ function TVInner() {
         snapshot.docChanges().forEach(change => {
           if ((change.type === 'added' || change.type === 'modified') && change.doc.data().estado === 'llamado') {
             const t = change.doc.data() as Turno;
-            const textToSpeak = `Siguiente turno, ${t.letra_ticket ? 'letra ' + t.letra_ticket + ', ' : ''}número ${t.numero}. Dirigirse al módulo ${t.letra_especialista}.`;
+            const ticket = t.letra_ticket ? `letra ${t.letra_ticket}, ` : '';
+            const modulo = t.letra_especialista ? ` al módulo ${t.letra_especialista}` : '';
+            const textToSpeak = `Atención. Siguiente turno, ${ticket}número ${t.numero}. Diríjase${modulo}.`;
             if (audioEnabledRef.current) {
-              const ding = new Audio('/ding.mp3');
-              ding.play().then(() => {
-                setTimeout(() => speak(textToSpeak), 800);
-              }).catch(() => speak(textToSpeak));
+              ensureVoicesLoaded().then(() => {
+                const ding = new Audio('/ding.mp3');
+                ding.play().then(() => {
+                  setTimeout(() => speak(textToSpeak), 800);
+                }).catch(() => speak(textToSpeak));
+              });
             }
           }
         });
@@ -358,7 +375,7 @@ function TVInner() {
 
 export default function TVPage() {
   return (
-    <Suspense fallback={<main className={styles.overlay}><div className={styles.initCard}><p>Cargando...</p></div></main>}>
+    <Suspense fallback={<main className={styles.overlay}><div className={styles.initCard}><div style={{width:'200px',height:'20px',background:'var(--skeleton-base)',borderRadius:'8px',animation:'skeletonPulse 1.5s ease-in-out infinite',margin:'0 auto'}} /></div></main>}>
       <TVInner />
     </Suspense>
   );

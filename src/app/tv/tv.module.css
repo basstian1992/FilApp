@@ -2,25 +2,27 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&display=swap');
 
+/* TV theme vars defined in globals.css */
+
 .overlay {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 60%, #020617 100%);
-  color: white;
+  background: radial-gradient(circle at 50% 0%, var(--tv-bg-medium) 0%, var(--tv-bg-dark) 60%, var(--tv-bg-deepest) 100%);
+  color: var(--tv-text-primary);
   font-family: 'Outfit', system-ui, sans-serif;
 }
 
 .initCard {
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--tv-glass-bg);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   padding: 4rem;
   border-radius: 32px;
   text-align: center;
   max-width: 600px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--tv-border-strong);
   box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
@@ -28,14 +30,14 @@
   font-size: 2.5rem;
   font-weight: 800;
   margin-bottom: 1.5rem;
-  background: linear-gradient(135deg, #60a5fa, #c084fc);
+  background: var(--tv-logo-grad);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: -0.02em;
 }
 
 .initCard p {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--tv-text-secondary);
   font-size: 1.15rem;
   line-height: 1.7;
   margin-bottom: 2.5rem;
@@ -70,12 +72,12 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #020617; /* Deepest slate */
+  background-color: var(--tv-bg-deepest);
   background-image: var(--tv-bg-image, none);
   background-size: cover;
   background-position: center;
   background-blend-mode: overlay;
-  color: #f8fafc;
+  color: var(--tv-text-primary);
   font-family: 'Outfit', system-ui, sans-serif;
   overflow: hidden;
 }
@@ -88,9 +90,9 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 3rem;
-  background: rgba(2, 6, 23, 0.85);
+  background: var(--tv-header-bg);
   backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--tv-border);
   z-index: 10;
   flex-shrink: 0;
 }
@@ -98,14 +100,14 @@
 .logo {
   font-size: 2.2rem;
   font-weight: 900;
-  background: linear-gradient(to right, var(--tv-primary, #60a5fa), #c084fc);
+  background: var(--tv-logo-grad);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: -1px;
 }
 
 .tvLogoImg {
-  height: 60px; /* Made much larger for the TV screen */
+  height: 60px;
   max-width: 200px;
   object-fit: contain;
   filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
@@ -116,7 +118,7 @@
   display: flex;
   align-items: center;
   gap: 1rem;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--tv-text-secondary);
   font-size: 2rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -131,8 +133,8 @@
 
 .audioToggle, .themeToggle {
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--tv-border-strong);
+  color: var(--tv-text-muted);
   padding: 0.75rem;
   border-radius: 14px;
   cursor: pointer;
@@ -144,7 +146,7 @@
 
 .audioToggle:hover, .themeToggle:hover {
   background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  color: var(--tv-text-primary);
   transform: scale(1.05);
 }
 
@@ -176,8 +178,8 @@
 
 .currentCallCard {
   flex: 1;
-  background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--tv-bg-card);
+  border: 1px solid var(--tv-border);
   border-radius: 40px;
   display: flex;
   flex-direction: column;
@@ -217,7 +219,7 @@
   font-weight: 800;
   letter-spacing: 0.4em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--tv-text-muted);
   margin-bottom: 1.5rem;
   z-index: 1;
 }
@@ -226,7 +228,7 @@
   font-size: 15vw;
   font-weight: 900;
   line-height: 0.9;
-  background: linear-gradient(180deg, #ffffff 0%, #cbd5e1 100%);
+  background: var(--tv-call-grad);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: -0.05em;
@@ -243,14 +245,14 @@
 .callTurnoEmpty {
   font-size: 8rem;
   font-weight: 300;
-  color: rgba(255, 255, 255, 0.05);
+  color: var(--tv-text-dim);
   z-index: 1;
 }
 
 .callModule {
   font-size: 3rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--tv-text-secondary);
   margin-top: 1rem;
   z-index: 1;
   display: flex;
@@ -268,21 +270,21 @@
 .callStaff {
   font-size: 1.75rem;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--tv-text-secondary);
   margin-top: 2rem;
   background: rgba(255, 255, 255, 0.05);
   padding: 0.75rem 2.5rem;
   border-radius: 100px;
   z-index: 1;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--tv-border);
   backdrop-filter: blur(10px);
 }
 
 /* ===== INGRESOS BAR ===== */
 
 .ingresosBar {
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--tv-glass-bg);
+  border: 1px solid var(--tv-border);
   border-radius: 24px;
   padding: 1.25rem 2rem;
   display: flex;
@@ -298,7 +300,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.15em;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--tv-text-muted);
   white-space: nowrap;
 }
 
@@ -327,7 +329,7 @@
 }
 
 .ingresoEmpty {
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--tv-text-dim);
   font-size: 1.1rem;
   font-weight: 300;
   font-style: italic;
@@ -338,8 +340,8 @@
 .historySection {
   display: flex;
   flex-direction: column;
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: var(--tv-glass-bg-strong);
+  border: 1px solid var(--tv-border);
   border-radius: 40px;
   overflow: hidden;
   backdrop-filter: blur(20px);
@@ -351,16 +353,16 @@
   font-weight: 800;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.5);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--tv-text-secondary);
+  border-bottom: 1px solid var(--tv-border);
   flex-shrink: 0;
   text-align: center;
-  background: rgba(0, 0, 0, 0.2);
+  background: color-mix(in srgb, var(--tv-text-primary) 8%, transparent);
 }
 
 .historyList {
   flex: 1;
-  overflow-y: hidden; /* Hide scrollbar for clean look, items slide in */
+  overflow-y: hidden;
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -368,8 +370,8 @@
 }
 
 .historyItem {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.03);
+  background: var(--tv-glass-bg);
+  border: 1px solid var(--tv-border);
   border-left: 4px solid var(--tv-primary, #3b82f6);
   border-radius: 16px;
   padding: 1.25rem 1.5rem;
@@ -388,7 +390,7 @@
 .historyTurno {
   font-size: 1.8rem;
   font-weight: 800;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--tv-text-primary);
   letter-spacing: -0.02em;
 }
 
@@ -403,7 +405,7 @@
 
 .historyEmpty {
   text-align: center;
-  color: rgba(255, 255, 255, 0.15);
+  color: var(--tv-text-dim);
   font-size: 1.2rem;
   font-weight: 300;
   padding: 3rem 1rem;
@@ -413,13 +415,13 @@
 
 .footerTicker {
   height: 60px;
-  background: #0f172a;
+  background: var(--tv-footer-bg);
   border-top: 1px solid color-mix(in srgb, var(--tv-primary, #3b82f6) 20%, transparent);
   display: flex;
   align-items: center;
   font-size: 1.5rem;
   font-weight: 400;
-  color: #94a3b8;
+  color: var(--tv-text-muted);
   overflow: hidden;
   flex-shrink: 0;
   box-shadow: 0 -10px 30px rgba(0,0,0,0.3);
@@ -484,5 +486,125 @@
     gap: 0.5rem;
     border-left: none;
     border-top: 4px solid #3b82f6;
+  }
+}
+
+/* ===== LARGE SCREEN / 4K ===== */
+
+@media (min-width: 2000px) {
+  .header {
+    height: 120px;
+    padding: 0 5rem;
+  }
+  .logo {
+    font-size: 3.5rem;
+  }
+  .tvLogoImg {
+    height: 90px;
+    max-width: 300px;
+  }
+  .headerCenter {
+    font-size: 3rem;
+  }
+  .mainContent {
+    grid-template-columns: 1fr 600px;
+    gap: 3rem;
+    padding: 3rem 5rem;
+  }
+  .currentCallCard {
+    border-radius: 60px;
+    padding: 5rem;
+  }
+  .callTurno {
+    font-size: 12vw;
+  }
+  .callModule {
+    font-size: 4.5rem;
+  }
+  .callModuleHighlight {
+    font-size: 6rem;
+  }
+  .callStaff {
+    font-size: 2.5rem;
+    padding: 1rem 4rem;
+  }
+  .callLabel {
+    font-size: 1.75rem;
+  }
+  .ingresosBar {
+    padding: 1.75rem 3rem;
+    min-height: 100px;
+  }
+  .ingresoItem {
+    font-size: 2rem;
+    padding: 0.75rem 2rem;
+  }
+  .historySection {
+    border-radius: 60px;
+  }
+  .historyTitle {
+    font-size: 1.5rem;
+    padding: 2.5rem 3rem;
+  }
+  .historyTurno {
+    font-size: 2.5rem;
+  }
+  .historyModulo {
+    font-size: 1.75rem;
+  }
+  .footerTicker {
+    height: 80px;
+    font-size: 2rem;
+  }
+  .tickerText {
+    font-size: 2rem;
+  }
+  .audioToggle, .themeToggle {
+    padding: 1rem;
+    border-radius: 18px;
+  }
+}
+
+@media (min-width: 3000px) {
+  .header {
+    height: 160px;
+    padding: 0 8rem;
+  }
+  .logo {
+    font-size: 5rem;
+  }
+  .tvLogoImg {
+    height: 120px;
+    max-width: 400px;
+  }
+  .headerCenter {
+    font-size: 4rem;
+  }
+  .mainContent {
+    grid-template-columns: 1fr 800px;
+    gap: 4rem;
+    padding: 4rem 8rem;
+  }
+  .callTurno {
+    font-size: 10vw;
+  }
+  .callModule {
+    font-size: 6rem;
+  }
+  .callModuleHighlight {
+    font-size: 8rem;
+  }
+  .callStaff {
+    font-size: 3.5rem;
+  }
+  .historiaSection {
+    border-radius: 80px;
+  }
+  .footerTicker {
+    height: 100px;
+    font-size: 2.5rem;
+  }
+  .tickerText {
+    font-size: 2.5rem;
   }
 }

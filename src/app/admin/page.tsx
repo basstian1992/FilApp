@@ -21,12 +21,14 @@ import {
   Tablet, LayoutDashboard, FileText, PlusCircle, Trash2, CheckCircle
 } from 'lucide-react';
 import UserDirectory from '@/components/UserDirectory';
+import { useToast } from '@/components/Toast';
+import { SkeletonScreen } from '@/components/Skeleton';
 
 /* ─── Helpers ──────────────────────────────────────────────────────────────── */
 const GERENTE_EMAILS = ['b.alarconatenas@gmail.com', 'contacto@asesoriapublica.cl'];
 
-function exportToCSV(filename: string, rows: any[]) {
-  if (!rows?.length) { alert('No hay datos para exportar'); return; }
+function exportToCSV(filename: string, rows: any[], toast?: { (msg: string, type?: 'success' | 'error' | 'warning'): void }) {
+  if (!rows?.length) { toast?.('No hay datos para exportar', 'warning'); return; }
   const sep = ';';
   const keys = Object.keys(rows[0]);
   const csv = [
@@ -70,6 +72,7 @@ type GerenteTab = 'instituciones' | 'administradores' | 'reportes';
 /* ─── Component ──────────────────────────────────────────────────────────────── */
 export default function AdminPage() {
   const router = useRouter();
+  const { toast } = useToast();
 
   // Auth
   const [session, setSession] = useState<any>(null);
@@ -159,7 +162,7 @@ export default function AdminPage() {
       }
     } catch (err) {
       console.error('Error loading dashboard:', err);
-      alert('Error al cargar datos del panel.');
+      toast('Error al cargar datos del panel.', 'error');
     }
   };
 
@@ -229,7 +232,7 @@ export default function AdminPage() {
       }
       setNewInstName(''); setShowInstForm(false);
       await loadDashboard(userProfile.user_id, userProfile.role);
-    } catch { alert('Error al crear institución'); }
+    } catch { toast('Error al crear institución', 'error'); }
     setInstSaving(false);
   };
 
@@ -239,7 +242,7 @@ export default function AdminPage() {
       await updateDoc(doc(db, 'institutions', inst.id), { estado: 'activa' });
       if (inst.owner_id) await updateDoc(doc(db, 'especialistas', inst.owner_id), { estado_funcionario: 'activo' });
       await loadDashboard(userProfile.user_id, userProfile.role);
-    } catch (err: any) { alert('Error al autorizar: ' + err.message); }
+    } catch (err: any) { toast('Error al autorizar: ' + err.message, 'error'); }
   };
 
   const handleDeleteInstitution = async (instId: string, instName: string) => {
@@ -247,7 +250,7 @@ export default function AdminPage() {
     try {
       await deleteDoc(doc(db, 'institutions', instId));
       setInstitutions(prev => prev.filter(i => i.id !== instId));
-    } catch (err: any) { alert('Error al eliminar: ' + err.message); }
+    } catch (err: any) { toast('Error al eliminar: ' + err.message, 'error'); }
   };
 
   const handleDeleteAdmin = async (adminId: string, adminName: string) => {
@@ -255,7 +258,7 @@ export default function AdminPage() {
     try {
       await deleteDoc(doc(db, 'especialistas', adminId));
       setAllAdmins(prev => prev.filter(a => a.id !== adminId));
-    } catch (err: any) { alert('Error al eliminar: ' + err.message); }
+    } catch (err: any) { toast('Error al eliminar: ' + err.message, 'error'); }
   };
 
   const handleDeleteFuncionario = async (funcId: string, funcName: string) => {
@@ -264,13 +267,13 @@ export default function AdminPage() {
       await deleteDoc(doc(db, 'especialistas', funcId));
       setFuncionarios(prev => prev.filter(f => f.id !== funcId));
       setPendingFuncionarios(prev => prev.filter(f => f.id !== funcId));
-    } catch (err: any) { alert('Error al eliminar: ' + err.message); }
+    } catch (err: any) { toast('Error al eliminar: ' + err.message, 'error'); }
   };
 
   const handleApproveFuncionario = async (funcId: string, funcName: string) => {
     const fn = pendingFuncionarios.find(f => f.id === funcId);
     if (!fn?.departamento) {
-      alert('Asigna primero un departamento al funcionario antes de aprobar.');
+      toast('Asigna primero un departamento al funcionario antes de aprobar.', 'warning');
       return;
     }
     if (!confirm(`¿Aprobar y activar a "${funcName}"?`)) return;
@@ -278,7 +281,7 @@ export default function AdminPage() {
       await updateDoc(doc(db, 'especialistas', funcId), { estado_funcionario: 'activo' });
       setPendingFuncionarios(prev => prev.filter(f => f.id !== funcId));
       setFuncionarios(prev => [...prev, { ...fn, estado_funcionario: 'activo' }]);
-    } catch (err: any) { alert('Error al aprobar: ' + err.message); }
+    } catch (err: any) { toast('Error al aprobar: ' + err.message, 'error'); }
   };
 
   const openDetail = async (instId: string) => {
@@ -304,7 +307,7 @@ export default function AdminPage() {
       }
     } catch (err) {
       console.error(err);
-      alert('Error al cargar la institución.');
+      toast('Error al cargar la institución.', 'error');
     }
     setLoading(false);
   };
@@ -324,7 +327,7 @@ export default function AdminPage() {
         n8n_webhook_url: webhookUrl.trim(),
       }
     });
-    alert('✅ Configuración guardada');
+    toast('Configuración guardada');
     setSavingConfig(false);
   };
 
@@ -474,7 +477,7 @@ export default function AdminPage() {
     );
     if (!step1) return;
     const phrase = prompt('Para confirmar, escribe exactamente:  BORRAR TODO');
-    if (phrase !== 'BORRAR TODO') { alert('Cancelado. Texto no coincide.'); return; }
+    if (phrase !== 'BORRAR TODO') { toast('Cancelado. Texto no coincide.', 'warning'); return; }
 
     setResetting(true);
     try {
@@ -494,21 +497,16 @@ export default function AdminPage() {
       // Reset gerente's own institution link
       await updateDoc(doc(db, 'especialistas', userProfile.id), { institution_id: '' });
       setInstitutions([]); setAllAdmins([]); setFuncionarios([]); setPendingFuncionarios([]);
-      alert('✅ Sistema reiniciado. Recuerda eliminar las cuentas antiguas en Firebase Authentication si deseas reutilizar esos correos.');
+      toast('Sistema reiniciado. Recuerda eliminar las cuentas antiguas en Firebase Authentication si deseas reutilizar esos correos.');
     } catch (err: any) {
-      alert('Error durante el reset: ' + err.message);
+      toast('Error durante el reset: ' + err.message, 'error');
     }
     setResetting(false);
   };
 
   /* ── Render ─────────────────────────────────────────────────────────────────── */
   if (loading) {
-    return (
-      <div className={styles.centerLoad}>
-        <div className={styles.loadSpinner} />
-        <span>Cargando panel…</span>
-      </div>
-    );
+    return <SkeletonScreen />;
   }
 
   const deptosList = deptosStr.split(',').map(s => s.trim()).filter(Boolean);

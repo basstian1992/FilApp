@@ -11,6 +11,7 @@ import {
   Building2, User, Mail, Lock, ArrowLeft, ArrowRight,
   CheckCircle, Eye, EyeOff, Briefcase, Users
 } from 'lucide-react';
+import { SkeletonLine } from '@/components/Skeleton';
 
 type Mode = 'select' | 'admin' | 'funcionario';
 
@@ -315,7 +316,7 @@ export default function RegisterPage() {
               <div className={styles.inputGroup}>
                 <label><Building2 size={14} /> Institución donde trabajas</label>
                 {loadingInsts ? (
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', padding: '0.5rem 0' }}>Cargando instituciones…</p>
+                  <SkeletonLine />
                 ) : (
                   <select
                     value={selectedInstId}

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useRef, useCallback } from 'react';
+import { Suspense, useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { db } from '@/lib/firebase/client';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
@@ -43,6 +43,8 @@ const LATAM_LANG = /es-(CL|MX|AR|CO|PE|419|US)/;
 
 let _cachedVoices: SpeechSynthesisVoice[] = [];
 let _voiceLoadPromise: Promise<SpeechSynthesisVoice[]> | null = null;
+const _utteranceRefs: SpeechSynthesisUtterance[] = [];
+let _gcInterval: ReturnType<typeof setInterval> | null = null;
 
 function ensureVoicesLoaded(): Promise<SpeechSynthesisVoice[]> {
   if (_cachedVoices.length > 0) return Promise.resolve(_cachedVoices);
@@ -86,6 +88,60 @@ function selectBestSpanishVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesis
   return spanish[0];
 }
 
+function speakText(texto: string, audioEnabled: boolean) {
+  if (!audioEnabled || !window.speechSynthesis || !texto.trim()) return;
+
+  window.speechSynthesis.cancel();
+  _utteranceRefs.length = 0;
+
+  // Start GC protection interval
+  if (!_gcInterval) {
+    _gcInterval = setInterval(() => {
+      if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+        window.speechSynthesis.cancel();
+      }
+    }, 5000);
+  }
+
+  const voices = window.speechSynthesis.getVoices();
+  // If voices aren't cached yet, try to reload
+  const bestVoice = _cachedVoices.length > 0 ? selectBestSpanishVoice(_cachedVoices) : selectBestSpanishVoice(voices);
+
+  const segments = texto.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [texto];
+
+  const speakSegment = (index: number) => {
+    if (index >= segments.length) return;
+    const seg = segments[index].trim();
+    if (!seg) { speakSegment(index + 1); return; }
+
+    const wordCount = seg.split(/\s+/).length;
+    let rate = 0.85;
+    let pitch = 1.0;
+    if (wordCount > 15) { rate = 0.88; pitch = 0.95; }
+    else if (wordCount > 8) { rate = 0.84; pitch = 1.0; }
+    else if (wordCount > 3) { rate = 0.8; pitch = 1.05; }
+    else { rate = 0.75; pitch = 1.1; }
+
+    const utterance = new SpeechSynthesisUtterance(seg);
+    if (bestVoice) {
+      utterance.voice = bestVoice;
+      utterance.lang = bestVoice.lang;
+    } else {
+      utterance.lang = 'es-CL';
+    }
+    utterance.rate = rate;
+    utterance.pitch = pitch;
+    utterance.volume = 1;
+    utterance.onend = () => speakSegment(index + 1);
+    utterance.onerror = () => speakSegment(index + 1);
+
+    _utteranceRefs.push(utterance);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  speakSegment(0);
+}
+
 function TVInner() {
   const searchParams = useSearchParams();
   const institutionId = searchParams.get('institution');
@@ -109,11 +165,10 @@ function TVInner() {
   const audioEnabledRef = useRef(isAudioEnabled);
   const isFirstLoadLlamado = useRef(true);
   const isFirstLoadEspera = useRef(true);
-  const voicesReadyRef = useRef(false);
   useEffect(() => { audioEnabledRef.current = isAudioEnabled; }, [isAudioEnabled]);
 
   useEffect(() => {
-    ensureVoicesLoaded().then(() => { voicesReadyRef.current = true; });
+    ensureVoicesLoaded().then(() => {});
   }, []);
 
   useEffect(() => {
@@ -126,49 +181,6 @@ function TVInner() {
     return () => clearInterval(interval);
   }, []);
 
-  const speak = useCallback((texto: string) => {
-    if (!audioEnabledRef.current || !window.speechSynthesis) return;
-
-    window.speechSynthesis.cancel();
-
-    const voices = window.speechSynthesis.getVoices();
-    const bestVoice = selectBestSpanishVoice(voices);
-
-    // Split into sentences for natural pauses
-    const segments = texto.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [texto];
-
-    let delay = 0;
-    segments.forEach((seg, i) => {
-      const wordCount = seg.trim().split(/\s+/).length;
-      let rate = 0.85;
-      let pitch = 1.0;
-      if (wordCount > 15) {
-        rate = 0.88; pitch = 0.95;
-      } else if (wordCount > 8) {
-        rate = 0.84; pitch = 1.0;
-      } else if (wordCount > 3) {
-        rate = 0.8; pitch = 1.05;
-      } else {
-        rate = 0.75; pitch = 1.1;
-      }
-
-      setTimeout(() => {
-        const utterance = new SpeechSynthesisUtterance(seg.trim());
-        if (bestVoice) {
-          utterance.voice = bestVoice;
-          utterance.lang = bestVoice.lang;
-        } else {
-          utterance.lang = 'es-CL';
-        }
-        utterance.rate = rate;
-        utterance.pitch = pitch;
-        utterance.volume = 1;
-        window.speechSynthesis.speak(utterance);
-      }, delay);
-
-      delay += Math.max(400, wordCount * 120);
-    });
-  }, []);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -215,8 +227,8 @@ function TVInner() {
               ensureVoicesLoaded().then(() => {
                 const ding = new Audio('/ding.mp3');
                 ding.play().then(() => {
-                  setTimeout(() => speak(textToSpeak), 800);
-                }).catch(() => speak(textToSpeak));
+                  setTimeout(() => speakText(textToSpeak, audioEnabledRef.current), 800);
+                }).catch(() => speakText(textToSpeak, audioEnabledRef.current));
               });
             }
           }

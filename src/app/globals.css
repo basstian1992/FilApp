@@ -9,11 +9,11 @@
   --tv-text-secondary: #334155;
   --tv-text-muted: #64748b;
   --tv-text-dim: #94a3b8;
-  --tv-border: rgba(0, 0, 0, 0.06);
-  --tv-border-strong: rgba(0, 0, 0, 0.1);
-  --tv-header-bg: rgba(255, 255, 255, 0.85);
-  --tv-glass-bg: rgba(255, 255, 255, 0.6);
-  --tv-glass-bg-strong: rgba(255, 255, 255, 0.5);
+  --tv-border: rgba(0, 0, 0, 0.12);
+  --tv-border-strong: rgba(0, 0, 0, 0.2);
+  --tv-header-bg: rgba(255, 255, 255, 0.9);
+  --tv-glass-bg: rgba(255, 255, 255, 0.8);
+  --tv-glass-bg-strong: rgba(255, 255, 255, 0.7);
   --tv-footer-bg: #e2e8f0;
   --tv-logo-grad: linear-gradient(to right, var(--tv-primary, #2563eb), #7c3aed);
   --tv-call-grad: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);

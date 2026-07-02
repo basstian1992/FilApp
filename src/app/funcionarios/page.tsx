@@ -35,6 +35,7 @@ import UserForm from '@/components/UserForm';
 import UserDirectory from '@/components/UserDirectory';
 import { useToast } from '@/components/Toast';
 import { SkeletonScreen } from '@/components/Skeleton';
+import { useSoundManager } from '@/hooks/useSoundManager';
 
 interface Funcionario {
   id: string;
@@ -72,6 +73,7 @@ interface Notification {
 export default function StaffPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { playDing } = useSoundManager();
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState('');
@@ -270,6 +272,9 @@ export default function StaffPage() {
                 const deptoStr = newTurno.departamento_solicitado || currentFunc.departamento;
                 const priorityTag = newTurno.is_appointment ? '🔔 *ALTA PRIORIDAD* ' : '';
                 const msg = `${priorityTag}🔔 *FilApp - Nuevo Turno*\nSe ha solicitado un nuevo turno en tu módulo de *${deptoStr}*.\n🎫 *Turno:* ${ticketStr}\n👥 *Personas en cola:* ${queueCount}\nIngresa al panel para atender.`;
+
+                playDing();
+                toast(`Nuevo turno ${ticketStr} para ${deptoStr}`);
 
                 fetch('/api/whatsapp', {
                   method: 'POST',

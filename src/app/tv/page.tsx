@@ -94,13 +94,17 @@ function speakText(texto: string, audioEnabled: boolean) {
   window.speechSynthesis.cancel();
   _utteranceRefs.length = 0;
 
-  // Start GC protection interval
+  // Start GC protection interval - keep voices alive and prevent Chrome from collecting
   if (!_gcInterval) {
     _gcInterval = setInterval(() => {
+      window.speechSynthesis.getVoices();
       if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+        const idleUtterance = new SpeechSynthesisUtterance('');
+        idleUtterance.volume = 0;
+        window.speechSynthesis.speak(idleUtterance);
         window.speechSynthesis.cancel();
       }
-    }, 5000);
+    }, 7000);
   }
 
   const voices = window.speechSynthesis.getVoices();

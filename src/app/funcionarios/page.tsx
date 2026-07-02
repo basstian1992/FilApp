@@ -37,6 +37,9 @@ import { useToast } from '@/components/Toast';
 import { SkeletonScreen } from '@/components/Skeleton';
 import { useSoundManager } from '@/hooks/useSoundManager';
 
+const whatsappCooldowns = new Map<string, number>();
+const WHATSAPP_COOLDOWN_MS = 35000;
+
 interface Funcionario {
   id: string;
   user_id: string;
@@ -276,17 +279,21 @@ export default function StaffPage() {
                 playDing();
                 toast(`Nuevo turno ${ticketStr} para ${deptoStr}`);
 
-                fetch('/api/whatsapp', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    phone: currentFunc.whatsapp_phone,
-                    message: msg,
-                    apikey: currentFunc.whatsapp_apikey.trim()
-                  })
-                }).then(r => r.json()).then(d => {
-                  if (!d.success) console.error('WhatsApp error:', d.error);
-                }).catch(err => console.error('Error al enviar WhatsApp:', err));
+                const lastSent = whatsappCooldowns.get(currentFunc.whatsapp_phone) || 0;
+                if (Date.now() - lastSent > WHATSAPP_COOLDOWN_MS) {
+                  whatsappCooldowns.set(currentFunc.whatsapp_phone, Date.now());
+                  fetch('/api/whatsapp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      phone: currentFunc.whatsapp_phone,
+                      message: msg,
+                      apikey: currentFunc.whatsapp_apikey.trim()
+                    })
+                  }).then(r => r.json()).then(d => {
+                    if (!d.success) console.error('WhatsApp error:', d.error);
+                  }).catch(err => console.error('Error al enviar WhatsApp:', err));
+                }
               }
             }
           }

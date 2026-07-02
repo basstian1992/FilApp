@@ -109,6 +109,24 @@
                radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.1) 0px, transparent 50%);
 }
 
+[data-theme="light"] {
+  --tv-bg-deepest: #f1f5f9;
+  --tv-bg-dark: #ffffff;
+  --tv-bg-medium: #e2e8f0;
+  --tv-bg-card: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+  --tv-text-primary: #0f172a;
+  --tv-text-secondary: #334155;
+  --tv-text-muted: #64748b;
+  --tv-text-dim: #94a3b8;
+  --tv-border: rgba(0, 0, 0, 0.12);
+  --tv-border-strong: rgba(0, 0, 0, 0.2);
+  --tv-header-bg: rgba(255, 255, 255, 0.9);
+  --tv-glass-bg: rgba(255, 255, 255, 0.8);
+  --tv-glass-bg-strong: rgba(255, 255, 255, 0.7);
+  --tv-history-title-bg: #e2e8f0;
+  --tv-footer-bg: #e2e8f0;
+}
+
 * {
   box-sizing: border-box;
   padding: 0;

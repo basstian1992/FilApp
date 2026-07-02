@@ -14,6 +14,7 @@
   --tv-header-bg: rgba(255, 255, 255, 0.9);
   --tv-glass-bg: rgba(255, 255, 255, 0.8);
   --tv-glass-bg-strong: rgba(255, 255, 255, 0.7);
+  --tv-history-title-bg: #e2e8f0;
   --tv-footer-bg: #e2e8f0;
   --tv-logo-grad: linear-gradient(to right, var(--tv-primary, #2563eb), #7c3aed);
   --tv-call-grad: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
@@ -80,6 +81,7 @@
   --tv-header-bg: rgba(2, 6, 23, 0.85);
   --tv-glass-bg: rgba(15, 23, 42, 0.6);
   --tv-glass-bg-strong: rgba(15, 23, 42, 0.5);
+  --tv-history-title-bg: #1e293b;
   --tv-footer-bg: #0f172a;
   --tv-logo-grad: linear-gradient(to right, var(--tv-primary, #60a5fa), #c084fc);
   --tv-call-grad: linear-gradient(180deg, #ffffff 0%, #cbd5e1 100%);

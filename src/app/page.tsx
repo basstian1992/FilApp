@@ -23,7 +23,11 @@ export default function LandingPage() {
   const [loginError, setLoginError] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingError, setLoadingError] = useState('');
+  const [publicInstitutions, setPublicInstitutions] = useState<any[]>([]);
+  const [loadingInsts, setLoadingInsts] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
+  const [instFetchDone, setInstFetchDone] = useState(false);
+  const [instError, setInstError] = useState('');
 
   // Safety timeout: prevent infinite loading
   useEffect(() => {
@@ -112,6 +116,18 @@ export default function LandingPage() {
     });
     return () => unsubscribe();
   }, [router]);
+
+  /* ─── Fetch active institutions for public landing ────────────────────── */
+  useEffect(() => {
+    if (loading || session) return;
+    if (instFetchDone) return;
+    setLoadingInsts(true);
+    setInstError('');
+    getDocs(query(collection(db, 'institutions'), where('estado', '==', 'activa')))
+      .then(snap => setPublicInstitutions(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+      .catch(() => setInstError('Error al cargar instituciones. Verifique conexión.'))
+      .finally(() => { setLoadingInsts(false); setInstFetchDone(true); });
+  }, [loading, session, instFetchDone]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -304,6 +320,7 @@ export default function LandingPage() {
         {/* LEFT — Hero */}
         <div className={styles.landingHero}>
           <div className={styles.heroGlow} />
+          <img src="/logo.png" alt="FilApp" className={styles.heroLogo} />
           <div className={styles.badge}>FilApp OS · v2.0</div>
           <h1 className={styles.landingTitle}>
             Sistema Multi-Institución<br />
@@ -352,15 +369,51 @@ export default function LandingPage() {
 
         {/* RIGHT — Actions */}
         <div className={styles.landingActions}>
+          {/* Join existing institution */}
+          <div className={styles.actionCard}>
+            <div className={styles.actionCardHeader}>
+              <Users size={22} className={styles.actionCardIcon} />
+              <h2>Unirme a una Institución</h2>
+            </div>
+            <p>Si tu institución ya está registrada, solicita acceso como funcionario. Tu cuenta quedará pendiente de aprobación.</p>
+            {instError ? (
+              <div className={styles.instError}>{instError}</div>
+            ) : loadingInsts ? (
+              <div className={styles.instLoading}>Cargando instituciones...</div>
+            ) : publicInstitutions.length === 0 ? (
+              <div className={styles.instLoading}>No hay instituciones disponibles.</div>
+            ) : (
+              <div className={styles.instGrid}>
+                {publicInstitutions.map(inst => (
+                  <Link
+                    key={inst.id}
+                    href={`/register?join=${inst.id}`}
+                    className={styles.instCard}
+                  >
+                    {inst.logo_url ? (
+                      <img src={inst.logo_url} alt="" className={styles.instLogo} />
+                    ) : (
+                      <div className={styles.instLogoPlaceholder}>
+                        <Building2 size={18} />
+                      </div>
+                    )}
+                    <span className={styles.instCardName}>{inst.name || 'Institución'}</span>
+                    <ArrowRight size={14} className={styles.instCardArrow} />
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Register new institution */}
           <div className={styles.actionCard}>
             <div className={styles.actionCardHeader}>
               <Building2 size={22} className={styles.actionCardIcon} />
-              <h2>Nueva Institución</h2>
+              <h2>Crear Nueva Institución</h2>
             </div>
-            <p>Registre su institución y configure categorías de atención, funcionarios y módulos.</p>
+            <p>Registre su institución y configure categorías de atención, funcionarios y módulos como administrador.</p>
             <Link href="/register" className={styles.primaryBtn}>
-              Registrar Institución <ArrowRight size={16} />
+              Crear Institución <ArrowRight size={16} />
             </Link>
           </div>
 
@@ -423,6 +476,9 @@ export default function LandingPage() {
           </div>
         </div>
       </div>
+      <footer style={{ textAlign: 'center', padding: '1rem 0', fontSize: '0.75rem', color: 'var(--text-tertiary)', borderTop: '1px solid var(--border-color)', marginTop: '2rem' }}>
+        App desarrollada por <a href="https://www.asesoriapublica.cl" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>www.asesoriapublica.cl</a>
+      </footer>
     </main>
   );
 }

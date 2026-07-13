@@ -6,7 +6,7 @@ import { db } from '@/lib/firebase/client';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { useTheme } from 'next-themes';
 import styles from './tv.module.css';
-import { Volume2, VolumeX, Play, Moon, Sun } from 'lucide-react';
+import { Volume2, VolumeX, Play, Moon, Sun, Mic } from 'lucide-react';
 
 interface Turno {
   id: string;
@@ -19,24 +19,31 @@ interface Turno {
   created_at?: string;
   called_at?: string;
   institution_id?: string;
+  rut_usuario?: string;
 }
 
 /* ─── Premium Voice Engine ─────────────────────────────────────────────── */
 const VOICE_PRIORITY_PATTERNS = [
-  'Microsoft Sabina',
-  'Microsoft Helena',
-  'Microsoft Carolina',
-  'Microsoft Dalia',
-  'Microsoft Pablo',
-  'Microsoft Raul',
-  'Microsoft',
   'Google Español',
   'Google español',
   'Google',
+  'Microsoft Sabina',
+  'Microsoft Catalina',
+  'Microsoft Carolina',
+  'Microsoft Helena',
+  'Microsoft Dalia',
+  'Microsoft Pablo',
+  'Microsoft Raul',
+  'Microsoft Jorge',
+  'Microsoft',
   'Natural',
   'Premium',
   'Online',
   'Multilingual Online',
+  'es-CL',
+  'es-MX',
+  'es-CO',
+  'es-AR',
 ];
 
 const LATAM_LANG = /es-(CL|MX|AR|CO|PE|419|US)/;
@@ -44,7 +51,6 @@ const LATAM_LANG = /es-(CL|MX|AR|CO|PE|419|US)/;
 let _cachedVoices: SpeechSynthesisVoice[] = [];
 let _voiceLoadPromise: Promise<SpeechSynthesisVoice[]> | null = null;
 const _utteranceRefs: SpeechSynthesisUtterance[] = [];
-let _gcInterval: ReturnType<typeof setInterval> | null = null;
 
 function ensureVoicesLoaded(): Promise<SpeechSynthesisVoice[]> {
   if (_cachedVoices.length > 0) return Promise.resolve(_cachedVoices);
@@ -77,39 +83,48 @@ function selectBestSpanishVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesis
   const spanish = voices.filter(v => v.lang.startsWith('es'));
   if (spanish.length === 0) return null;
 
-  for (const pattern of VOICE_PRIORITY_PATTERNS) {
-    const found = spanish.find(v => v.name.includes(pattern));
-    if (found) return found;
-  }
-
   const latam = spanish.filter(v => LATAM_LANG.test(v.lang));
+
+  const matchByPriority = (pool: SpeechSynthesisVoice[]) => {
+    for (const pattern of VOICE_PRIORITY_PATTERNS) {
+      const found = pool.find(v => v.name.includes(pattern));
+      if (found) return found;
+    }
+    return null;
+  };
+
+  const best = matchByPriority(latam);
+  if (best) return best;
+
   if (latam.length > 0) return latam[0];
+
+  const bestAny = matchByPriority(spanish);
+  if (bestAny) return bestAny;
 
   return spanish[0];
 }
 
-function speakText(texto: string, audioEnabled: boolean) {
-  if (!audioEnabled || !window.speechSynthesis || !texto.trim()) return;
+let _voiceAvailable: boolean | null = null;
+
+function isVoiceAvailable(): boolean {
+  if (_voiceAvailable !== null) return _voiceAvailable;
+  _voiceAvailable = typeof window !== 'undefined' && !!window.speechSynthesis && typeof window.speechSynthesis.speak === 'function';
+  return _voiceAvailable;
+}
+
+function speakText(texto: string, audioEnabled: boolean, forcedVoice?: SpeechSynthesisVoice | null) {
+  if (!audioEnabled || !isVoiceAvailable() || !texto.trim()) {
+    if (!audioEnabled) console.warn('[Voz TV] Audio desactivado');
+    else if (!isVoiceAvailable()) console.warn('[Voz TV] speechSynthesis no disponible');
+    return;
+  }
 
   window.speechSynthesis.cancel();
   _utteranceRefs.length = 0;
 
-  // Start GC protection interval - keep voices alive and prevent Chrome from collecting
-  if (!_gcInterval) {
-    _gcInterval = setInterval(() => {
-      window.speechSynthesis.getVoices();
-      if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
-        const idleUtterance = new SpeechSynthesisUtterance('');
-        idleUtterance.volume = 0;
-        window.speechSynthesis.speak(idleUtterance);
-        window.speechSynthesis.cancel();
-      }
-    }, 7000);
-  }
-
   const voices = window.speechSynthesis.getVoices();
-  // If voices aren't cached yet, try to reload
-  const bestVoice = _cachedVoices.length > 0 ? selectBestSpanishVoice(_cachedVoices) : selectBestSpanishVoice(voices);
+  _cachedVoices = voices.length > 0 ? voices : _cachedVoices;
+  const bestVoice = forcedVoice ?? (_cachedVoices.length > 0 ? selectBestSpanishVoice(_cachedVoices) : null);
 
   const segments = texto.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [texto];
 
@@ -119,12 +134,10 @@ function speakText(texto: string, audioEnabled: boolean) {
     if (!seg) { speakSegment(index + 1); return; }
 
     const wordCount = seg.split(/\s+/).length;
-    let rate = 0.85;
-    let pitch = 1.0;
-    if (wordCount > 15) { rate = 0.88; pitch = 0.95; }
-    else if (wordCount > 8) { rate = 0.84; pitch = 1.0; }
-    else if (wordCount > 3) { rate = 0.8; pitch = 1.05; }
-    else { rate = 0.75; pitch = 1.1; }
+    let rate = 1.05;
+    if (wordCount > 15) rate = 1.1;
+    else if (wordCount > 8) rate = 1.05;
+    else rate = 1.0;
 
     const utterance = new SpeechSynthesisUtterance(seg);
     if (bestVoice) {
@@ -134,10 +147,9 @@ function speakText(texto: string, audioEnabled: boolean) {
       utterance.lang = 'es-CL';
     }
     utterance.rate = rate;
-    utterance.pitch = pitch;
     utterance.volume = 1;
     utterance.onend = () => speakSegment(index + 1);
-    utterance.onerror = () => speakSegment(index + 1);
+    utterance.onerror = (e) => { console.warn('[Voz TV] error en segmento:', e.error); speakSegment(index + 1); };
 
     _utteranceRefs.push(utterance);
     window.speechSynthesis.speak(utterance);
@@ -165,14 +177,80 @@ function TVInner() {
   const [tvPrimaryColor, setTvPrimaryColor] = useState('');
   const [tvBackgroundUrl, setTvBackgroundUrl] = useState('');
   const [clock, setClock] = useState('');
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceIndex, setSelectedVoiceIndex] = useState(-1);
+  const [showVoicePicker, setShowVoicePicker] = useState(false);
+  const [currentUserName, setCurrentUserName] = useState('');
+const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
 
   const audioEnabledRef = useRef(isAudioEnabled);
   const isFirstLoadLlamado = useRef(true);
   const isFirstLoadEspera = useRef(true);
   useEffect(() => { audioEnabledRef.current = isAudioEnabled; }, [isAudioEnabled]);
+  useEffect(() => {
+    selectedVoiceRef.current = (selectedVoiceIndex >= 0 && selectedVoiceIndex < availableVoices.length) ? availableVoices[selectedVoiceIndex] : null;
+  }, [selectedVoiceIndex, availableVoices]);
+
+  // Lookup user name when currentCall changes
+  useEffect(() => {
+    if (currentCall?.rut_usuario) {
+      getDoc(doc(db, 'usuarios', currentCall.rut_usuario)).then(snap => {
+        if (snap.exists()) {
+          const d = snap.data();
+          setCurrentUserName(d.nombre_completo || '');
+        } else setCurrentUserName('');
+      }).catch(() => setCurrentUserName(''));
+    } else setCurrentUserName('');
+  }, [currentCall?.id, currentCall?.rut_usuario]);
+
+  // Apply CSS variables directly to root element (most reliable approach)
+  useEffect(() => {
+    const root = document.documentElement;
+    const vars = isDark ? {
+      '--tv-text-primary': '#f8fafc',
+      '--tv-text-secondary': 'rgba(255,255,255,0.7)',
+      '--tv-text-muted': 'rgba(255,255,255,0.4)',
+      '--tv-text-dim': 'rgba(255,255,255,0.05)',
+      '--tv-bg-deepest': '#020617',
+      '--tv-bg-dark': '#0f172a',
+      '--tv-bg-medium': '#1e293b',
+      '--tv-glass-bg-strong': 'rgba(15,23,42,0.5)',
+      '--tv-glass-bg': 'rgba(15,23,42,0.6)',
+      '--tv-header-bg': 'rgba(2,6,23,0.85)',
+      '--tv-history-title-bg': '#1e293b',
+      '--tv-border': 'rgba(255,255,255,0.05)',
+      '--tv-border-strong': 'rgba(255,255,255,0.08)',
+      '--tv-footer-bg': '#0f172a',
+    } : {
+      '--tv-text-primary': '#0f172a',
+      '--tv-text-secondary': '#334155',
+      '--tv-text-muted': '#64748b',
+      '--tv-text-dim': '#94a3b8',
+      '--tv-bg-deepest': '#f1f5f9',
+      '--tv-bg-dark': '#ffffff',
+      '--tv-bg-medium': '#e2e8f0',
+      '--tv-glass-bg-strong': 'rgba(255,255,255,0.7)',
+      '--tv-glass-bg': 'rgba(255,255,255,0.8)',
+      '--tv-header-bg': 'rgba(255,255,255,0.9)',
+      '--tv-history-title-bg': '#e2e8f0',
+      '--tv-border': 'rgba(0,0,0,0.12)',
+      '--tv-border-strong': 'rgba(0,0,0,0.2)',
+      '--tv-footer-bg': '#e2e8f0',
+    };
+    Object.entries(vars).forEach(([key, val]) => root.style.setProperty(key, val));
+  }, [isDark]);
 
   useEffect(() => {
-    ensureVoicesLoaded().then(() => {});
+    console.log('[TV] theme:', theme, '| resolvedTheme:', resolvedTheme, '| isDark:', isDark);
+    console.log('[TV] TV text-primary (computed):', getComputedStyle(document.documentElement).getPropertyValue('--tv-text-primary').trim());
+    ensureVoicesLoaded().then((v) => {
+      const sp = selectBestSpanishVoice(v);
+      const spanishVoices = v.filter(v => v.lang.startsWith('es'));
+      setAvailableVoices(spanishVoices);
+      const idx = spanishVoices.findIndex(sv => sv.name === sp?.name);
+      setSelectedVoiceIndex(idx >= 0 ? idx : 0);
+      console.log('[Voz TV] voces cargadas:', v.length, '| mejor voz:', sp?.name || 'ninguna');
+    });
   }, []);
 
   useEffect(() => {
@@ -228,12 +306,9 @@ function TVInner() {
             const modulo = t.letra_especialista ? ` al módulo ${t.letra_especialista}` : '';
             const textToSpeak = `Atención. Siguiente turno, ${ticket}número ${t.numero}. Diríjase${modulo}.`;
             if (audioEnabledRef.current) {
-              ensureVoicesLoaded().then(() => {
-                const ding = new Audio('/ding.mp3');
-                ding.play().then(() => {
-                  setTimeout(() => speakText(textToSpeak, audioEnabledRef.current), 800);
-                }).catch(() => speakText(textToSpeak, audioEnabledRef.current));
-              });
+              const ding = new Audio('/ding.mp3');
+              ding.play().catch(() => {});
+              setTimeout(() => speakText(textToSpeak, audioEnabledRef.current, selectedVoiceRef.current), 600);
             }
           }
         });
@@ -274,14 +349,44 @@ function TVInner() {
         <div className={styles.initCard}>
           <h1>Pantalla de Sala de Espera</h1>
           <p>Active las notificaciones de voz para comenzar a recibir los avisos de turnos llamados a los módulos de atención.</p>
-          <button className={styles.startBtn} onClick={startAudio}>
-            <Play size={22} />
-            Iniciar Pantalla
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
+            <button className={styles.startBtn} onClick={startAudio}>
+              <Play size={22} />
+              Iniciar Pantalla
+            </button>
+            <button className={styles.startBtn} style={{ padding: '0.75rem 1.5rem', fontSize: '1rem', background: 'linear-gradient(135deg, #64748b, #475569)' }} onClick={() => {
+              const voice = (selectedVoiceIndex >= 0 && selectedVoiceIndex < availableVoices.length) ? availableVoices[selectedVoiceIndex] : null;
+              speakText('Prueba de voz. Uno, dos, tres. Audio funcionando.', true, voice);
+            }}>
+              Probar Voz
+            </button>
+            {availableVoices.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center', marginTop: '0.25rem' }}>
+                <select
+                  value={selectedVoiceIndex}
+                  onChange={e => setSelectedVoiceIndex(parseInt(e.target.value))}
+                  style={{ padding: '0.5rem 1rem', borderRadius: '10px', border: '1px solid var(--tv-border-strong)', background: 'var(--tv-bg-medium)', color: 'var(--tv-text-primary)', fontSize: '0.85rem', maxWidth: '350px', cursor: 'pointer' }}
+                >
+                  {availableVoices.map((v, i) => (
+                    <option key={i} value={i}>{v.name} ({v.lang})</option>
+                  ))}
+                </select>
+                <span style={{ fontSize: '0.8rem', color: 'var(--tv-text-muted)' }}>Selecciona la voz para la TV</span>
+              </div>
+            )}
+            <div style={{ fontSize: '1rem', color: 'var(--tv-text-muted)', marginTop: '0.5rem', fontFamily: 'monospace' }}>
+              {theme} | {resolvedTheme} | {isDark ? '🌙' : '☀️'}
+            </div>
+          </div>
         </div>
       </main>
     );
   }
+
+  const themeForced = isDark ? 'dark' : 'light';
+  const forcedColors = isDark
+    ? { text: '#f8fafc', textSec: 'rgba(255,255,255,0.7)', bg: '#0f172a', cardBg: 'rgba(15,23,42,0.6)', titleBg: '#1e293b', border: 'rgba(255,255,255,0.05)', footer: '#0f172a' }
+    : { text: '#0f172a', textSec: '#334155', bg: '#f1f5f9', cardBg: 'rgba(255,255,255,0.8)', titleBg: '#e2e8f0', border: 'rgba(0,0,0,0.12)', footer: '#e2e8f0' };
 
   const customStyles = {
     '--tv-primary': tvPrimaryColor || '#3b82f6',
@@ -289,7 +394,26 @@ function TVInner() {
   } as React.CSSProperties;
 
   return (
-    <main className={styles.container} style={customStyles}>
+    <main className={styles.container} style={customStyles} data-tv-theme={themeForced}>
+      <style>{`
+        main[data-tv-theme="light"] .${styles.historyTurno} { color: #0f172a !important }
+        main[data-tv-theme="light"] .${styles.historyTitle} { color: #334155 !important; background: #e2e8f0 !important }
+        main[data-tv-theme="light"] .${styles.historyItem} { background: rgba(255,255,255,0.8) !important; border-color: rgba(0,0,0,0.12) !important }
+        main[data-tv-theme="light"] .${styles.historySection} { background: rgba(255,255,255,0.7) !important; border-color: rgba(0,0,0,0.12) !important }
+        main[data-tv-theme="light"] .${styles.ingresosBar} { background: rgba(255,255,255,0.8) !important; border-color: rgba(0,0,0,0.12) !important }
+        main[data-tv-theme="light"] .${styles.container} { background: #f1f5f9 !important }
+        main[data-tv-theme="light"] .${styles.header} { background: rgba(255,255,255,0.9) !important; border-color: rgba(0,0,0,0.12) !important }
+        main[data-tv-theme="light"] .${styles.footerTicker} { background: #e2e8f0 !important }
+        main[data-tv-theme="light"] .${styles.callPatient} { color: #0f172a !important; background: rgba(255,255,255,0.8) !important; border-color: rgba(0,0,0,0.12) !important }
+        main[data-tv-theme="light"] .${styles.callStaff} { color: #334155 !important }
+        main[data-tv-theme="light"] .${styles.historyModulo} { color: #3b82f6 !important }
+        main[data-tv-theme="dark"] .${styles.historyTurno} { color: #f8fafc !important }
+        main[data-tv-theme="dark"] .${styles.historyTitle} { color: rgba(255,255,255,0.7) !important; background: #1e293b !important }
+        main[data-tv-theme="dark"] .${styles.historyItem} { background: rgba(15,23,42,0.6) !important; border-color: rgba(255,255,255,0.05) !important }
+        main[data-tv-theme="dark"] .${styles.historySection} { background: rgba(15,23,42,0.5) !important; border-color: rgba(255,255,255,0.05) !important }
+        main[data-tv-theme="dark"] .${styles.header} { background: rgba(2,6,23,0.85) !important; border-color: rgba(255,255,255,0.05) !important }
+        main[data-tv-theme="dark"] .${styles.footerTicker} { background: #0f172a !important }
+      `}</style>
       <header className={styles.header}>
         <div className={styles.logo} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {logoUrl ? <img src={logoUrl} alt="Logo Institución" className={styles.tvLogoImg} /> : null}
@@ -299,6 +423,30 @@ function TVInner() {
           {clock && <span>{clock}</span>}
         </div>
         <div className={styles.headerActions}>
+          {availableVoices.length > 0 && (
+            <div className={styles.voiceSelectorWrap}>
+              <select
+                value={selectedVoiceIndex}
+                onChange={e => setSelectedVoiceIndex(parseInt(e.target.value))}
+                className={styles.voiceSelect}
+                title="Cambiar voz"
+              >
+                {availableVoices.map((v, i) => (
+                  <option key={i} value={i}>{v.name.replace(/^Microsoft /, '').replace(/^Google /, '')} ({v.lang})</option>
+                ))}
+              </select>
+              <button
+                className={styles.voicePreviewBtn}
+                onClick={() => {
+                  const voice = (selectedVoiceIndex >= 0 && selectedVoiceIndex < availableVoices.length) ? availableVoices[selectedVoiceIndex] : null;
+                  speakText('Hola, soy la voz de la pantalla de atención.', true, voice);
+                }}
+                title="Probar voz seleccionada"
+              >
+                <Mic size={16} />
+              </button>
+            </div>
+          )}
           <button
             className={styles.audioToggle}
             data-active={isAudioEnabled}
@@ -330,6 +478,11 @@ function TVInner() {
                   <div className={styles.callModule}>
                     Diríjase al Módulo{' '}
                     <span className={styles.callModuleHighlight}>{currentCall.letra_especialista}</span>
+                  </div>
+                )}
+                {currentUserName && (
+                  <div className={styles.callPatient}>
+                    {currentUserName}
                   </div>
                 )}
                 {currentCall.nombre_funcionario && (

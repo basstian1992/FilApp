@@ -30,7 +30,7 @@ function formatRutUI(raw: string) {
 }
 import { triggerWebhook } from '@/lib/notify';
 import styles from './funcionarios.module.css';
-import { LogOut, User, CheckCircle, SkipForward, Megaphone, Download, BellRing, Users } from 'lucide-react';
+import { LogOut, User, CheckCircle, SkipForward, Megaphone, Download, BellRing, Users, MonitorPlay } from 'lucide-react';
 import UserForm from '@/components/UserForm';
 import UserDirectory from '@/components/UserDirectory';
 import { useToast } from '@/components/Toast';
@@ -38,6 +38,7 @@ import { SkeletonScreen } from '@/components/Skeleton';
 import { useSoundManager } from '@/hooks/useSoundManager';
 
 const whatsappCooldowns = new Map<string, number>();
+const whatsappPending = new Set<string>();
 const WHATSAPP_COOLDOWN_MS = 35000;
 
 interface Funcionario {
@@ -65,6 +66,7 @@ interface Turno {
   departamento_solicitado?: string;
   priority_level?: number;
   is_appointment?: boolean;
+  priority?: boolean;
 }
 
 interface Notification {
@@ -94,6 +96,8 @@ export default function StaffPage() {
   const [activeTab, setActiveTab] = useState<'atencion' | 'directorio'>('atencion');
   const [isUserProfileComplete, setIsUserProfileComplete] = useState(false);
   const [resetLogs, setResetLogs] = useState<any[]>([]);
+  const [instLogo, setInstLogo] = useState('');
+  const [instName, setInstName] = useState('');
 
   // WhatsApp states
   const [whatsappPhone, setWhatsappPhone] = useState('');
@@ -139,7 +143,11 @@ export default function StaffPage() {
     if (funcionario?.institution_id) {
       const unsub = onSnapshot(doc(db, 'institutions', funcionario.institution_id), (docSnap: any) => {
         if (docSnap.exists()) {
-          setResetLogs(docSnap.data().reset_logs || []);
+          const data = docSnap.data();
+          setResetLogs(data.reset_logs || []);
+          const cfg = data.config || {};
+          setInstLogo(cfg.logo_url || '');
+          setInstName(data.name || 'FilApp');
         }
       });
       return () => unsub();
@@ -236,6 +244,36 @@ export default function StaffPage() {
     }
   };
 
+  const sendWa = (phone: string, key: string, msg: string) => {
+    if (whatsappPending.has(phone)) return;
+    const lastSent = whatsappCooldowns.get(phone) || 0;
+    if (Date.now() - lastSent <= WHATSAPP_COOLDOWN_MS) return;
+    whatsappPending.add(phone);
+    whatsappCooldowns.set(phone, Date.now());
+    fetch('/api/whatsapp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, message: msg, apikey: key.trim() })
+    }).then(r => r.json()).then(d => {
+      whatsappPending.delete(phone);
+      if (!d.success && !d.error?.includes('Too many requests')) {
+        console.error('WhatsApp error:', d.error);
+        toast('Error WhatsApp: ' + (d.error || 'desconocido'), 'error');
+      } else console.log('WhatsApp enviado a:', phone, 'respuesta:', d);
+    }).catch(err => {
+      whatsappPending.delete(phone);
+      console.error('Error al enviar WhatsApp:', err);
+      toast('Error al enviar WhatsApp: ' + err.message, 'error');
+    });
+  };
+
+  const sendWaNotification = (phone: string, key: string, ticketStr: string, deptoStr: string, queueCount: number, isAppointment?: boolean) => {
+    if (!phone || !key) return;
+    const priorityTag = isAppointment ? '🔔 *ALTA PRIORIDAD* ' : '';
+    const msg = `${priorityTag}🔔 *FilApp - Nuevo Turno*\nSe ha solicitado un nuevo turno en tu módulo de *${deptoStr}*.\n🎫 *Turno:* ${ticketStr}\n👥 *Personas en cola:* ${queueCount}\nIngresa al panel para atender.`;
+    sendWa(phone, key, msg);
+  };
+
   const refreshQueue = async (specId: string, institutionId: string) => {
     // Clean up previous listeners before setting up new ones
     unsubQueueRef.current?.();
@@ -255,9 +293,9 @@ export default function StaffPage() {
         : allDocs;
 
       filtered.sort((a, b) => {
-        const priorityA = a.priority_level || 0;
-        const priorityB = b.priority_level || 0;
-        if (priorityB !== priorityA) return priorityB - priorityA;
+        const pa = a.priority_level ?? (a.priority ? 2 : 0);
+        const pb = b.priority_level ?? (b.priority ? 2 : 0);
+        if (pb !== pa) return pb - pa;
         const timeA = new Date(a.created_at || 0).getTime();
         const timeB = new Date(b.created_at || 0).getTime();
         return timeA - timeB;
@@ -269,35 +307,35 @@ export default function StaffPage() {
             const newTurno = change.doc.data();
             if (currentFunc && currentFunc.departamento === newTurno.departamento_solicitado) {
               const queueCount = filtered.length;
+              const ticketStr = `${newTurno.letra_ticket || 'T'}-${newTurno.numero}`;
+              const deptoStr = newTurno.departamento_solicitado || currentFunc.departamento;
+              const isAppt = newTurno.is_appointment || newTurno.priority;
 
-              if (currentFunc.whatsapp_phone && currentFunc.whatsapp_apikey) {
-                const ticketStr = `${newTurno.letra_ticket || 'T'}-${newTurno.numero}`;
-                const deptoStr = newTurno.departamento_solicitado || currentFunc.departamento;
-                const priorityTag = newTurno.is_appointment ? '🔔 *ALTA PRIORIDAD* ' : '';
-                const msg = `${priorityTag}🔔 *FilApp - Nuevo Turno*\nSe ha solicitado un nuevo turno en tu módulo de *${deptoStr}*.\n🎫 *Turno:* ${ticketStr}\n👥 *Personas en cola:* ${queueCount}\nIngresa al panel para atender.`;
+              playDing();
+              toast(`${isAppt ? '📅 ' : ''}Nuevo turno ${ticketStr} para ${deptoStr}${isAppt ? ' (Hora Agendada)' : ''}`);
 
-                playDing();
-                toast(`Nuevo turno ${ticketStr} para ${deptoStr}`);
-
-                const lastSent = whatsappCooldowns.get(currentFunc.whatsapp_phone) || 0;
-                if (Date.now() - lastSent > WHATSAPP_COOLDOWN_MS) {
-                  whatsappCooldowns.set(currentFunc.whatsapp_phone, Date.now());
-                  fetch('/api/whatsapp', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      phone: currentFunc.whatsapp_phone,
-                      message: msg,
-                      apikey: currentFunc.whatsapp_apikey.trim()
-                    })
-                  }).then(r => r.json()).then(d => {
-                    if (!d.success) console.error('WhatsApp error:', d.error);
-                  }).catch(err => console.error('Error al enviar WhatsApp:', err));
-                }
-              }
+              sendWaNotification(waPhone, waKey, ticketStr, deptoStr, queueCount, isAppt);
             }
           }
         });
+
+        // Re-notify for turnos waiting >10 minutes
+        const waPhone = currentFunc?.whatsapp_phone || whatsappPhone;
+        const waKey = currentFunc?.whatsapp_apikey || whatsappApiKey;
+        if (waPhone && waKey && currentFunc) {
+          const now = Date.now();
+          filtered.forEach(t => {
+            const created = new Date(t.created_at || 0).getTime();
+            if (created > 0 && now - created > 600000) { // >10 min
+              const oldTicket = `${t.letra_ticket || 'T'}-${t.numero}`;
+              const lastSent = whatsappCooldowns.get(waPhone) || 0;
+              if (now - lastSent > WHATSAPP_COOLDOWN_MS) {
+                const msg = `⏰ *FilApp - Recordatorio*\nEl turno *${oldTicket}* lleva más de 10 minutos esperando en *${currentFunc.departamento}*.\n👥 *Personas en cola:* ${filtered.length}\nPor favor, revisa el panel para atender.`;
+                sendWa(waPhone, waKey, msg);
+              }
+            }
+          });
+        }
       }
       isFirstEspera.current = false;
 
@@ -580,9 +618,9 @@ export default function StaffPage() {
     }
 
     esperaDocs.sort((a, b) => {
-      const priorityA = a.priority_level || 0;
-      const priorityB = b.priority_level || 0;
-      if (priorityB !== priorityA) return priorityB - priorityA;
+      const pa = a.priority_level ?? (a.priority ? 2 : 0);
+      const pb = b.priority_level ?? (b.priority ? 2 : 0);
+      if (pb !== pa) return pb - pa;
       const timeA = new Date(a.created_at || 0).getTime();
       const timeB = new Date(b.created_at || 0).getTime();
       return timeA - timeB;
@@ -826,6 +864,10 @@ export default function StaffPage() {
           <div className={styles.identityText}>
             <span className={styles.greeting}>Buen día,</span>
             <strong className={styles.userName}>{funcionario?.nombre || 'Funcionario'}</strong>
+            <div className={styles.instBadge}>
+              {instLogo && <img src={instLogo} alt="Logo" className={styles.instLogoSmall} />}
+              <span className={styles.instNameSmall}>{instName}</span>
+            </div>
             <div className={styles.metaChips}>
               {funcionario?.cargo && <span className={styles.chip}>{funcionario.cargo}</span>}
               {funcionario?.departamento && <span className={styles.chip} data-variant="dept">{funcionario.departamento}</span>}
@@ -873,6 +915,18 @@ export default function StaffPage() {
             </button>
           </div>
 
+          {funcionario?.institution_id && (
+            <a
+              href={`/tv?institution=${funcionario.institution_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.tvBtn}
+              title="Abrir Pantalla TV"
+            >
+              <MonitorPlay size={17} /> <span className={styles.btnLabel}>TV</span>
+            </a>
+          )}
+
           <div className={styles.actionDivider} />
 
           {notifications.length > 0 && (
@@ -909,6 +963,17 @@ export default function StaffPage() {
               <div className={styles.statCard}>
             <h3>Pacientes en Espera</h3>
             <div className={styles.bigNumber}>{queueCount}</div>
+            {queueDocs.length > 0 && (
+              <div className={styles.quickQueue}>
+                {queueDocs.slice(0, 8).map(t => (
+                  <div key={t.id} className={`${styles.queueItem} ${(t.is_appointment || t.priority) ? styles.queueItemPriority : ''}`}>
+                    <span className={styles.queueTurno}>{t.letra_ticket || 'T'}-{t.numero}</span>
+                    {(t.is_appointment || t.priority) && <span className={styles.queueBadge}>📅</span>}
+                  </div>
+                ))}
+                {queueDocs.length > 8 && <div className={styles.queueMore}>+{queueDocs.length - 8} más</div>}
+              </div>
+            )}
             <button
               className={`${styles.actionBtn} ${styles.btnCall}`}
               onClick={llamarSiguiente}
@@ -984,13 +1049,44 @@ export default function StaffPage() {
                 <p className={styles.waInstructionText}>
                   Recibirás alertas en tiempo real en tu WhatsApp cuando lleguen turnos de <strong>{funcionario.departamento}</strong>.
                 </p>
-                <button
-                  onClick={handleUnlinkWhatsapp}
-                  className={styles.waDisconnectBtn}
-                  disabled={isSavingWhatsapp}
-                >
-                  Desconectar WhatsApp
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  <button
+                    onClick={async () => {
+                      const testMsg = `🔔 *FilApp - Prueba*\nHola *${funcionario.nombre}*, esta es una prueba de notificación.\nTu WhatsApp está configurado para *${funcionario.departamento}*.\nRecibirás alertas cuando lleguen turnos en espera.`;
+                      try {
+                        const r = await fetch('/api/whatsapp', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            phone: funcionario.whatsapp_phone,
+                            message: testMsg,
+                            apikey: funcionario.whatsapp_apikey?.trim()
+                          })
+                        });
+                        const d = await r.json();
+                        if (d.success) {
+                          toast('WhatsApp de prueba enviado! Revisa tu celular.', 'success');
+                        } else {
+                          toast('Error: ' + (d.error || 'desconocido'), 'error');
+                        }
+                      } catch (err: any) {
+                        toast('Error de conexión: ' + err.message, 'error');
+                      }
+                    }}
+                    className={styles.waConnectBtn}
+                    style={{ flex: 1, padding: '0.5rem', fontSize: '0.8rem' }}
+                  >
+                    Probar WhatsApp
+                  </button>
+                  <button
+                    onClick={handleUnlinkWhatsapp}
+                    className={styles.waDisconnectBtn}
+                    disabled={isSavingWhatsapp}
+                    style={{ flex: 1, padding: '0.5rem', fontSize: '0.8rem' }}
+                  >
+                    Desconectar
+                  </button>
+                </div>
               </div>
             ) : (
               <form onSubmit={handleLinkWhatsapp} className={styles.waForm}>
@@ -1061,8 +1157,10 @@ export default function StaffPage() {
               </div>
               <div className={styles.patientInfo}>
                 <p><strong>RUT:</strong> {currentTurno.rut_usuario}</p>
-                {currentTurno.is_appointment && (
-                  <p className={styles.appointmentTag}>Hora Agendada - Prioridad Alta</p>
+                {(currentTurno.is_appointment || currentTurno.priority) ? (
+                  <p className={styles.appointmentTag}>📅 Hora Agendada - Prioridad Alta</p>
+                ) : (
+                  <p className={styles.generalTag}>Atención General</p>
                 )}
               </div>
 

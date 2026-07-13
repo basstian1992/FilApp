@@ -43,9 +43,12 @@ function TotemInner() {
   const [categories, setCategories] = useState<string[]>([]);
   const [funcionarios, setFuncionarios] = useState<any[]>([]);
   const [oirsDepartamento, setOirsDepartamento] = useState('OIRS');
+  const [totemLogoUrl, setTotemLogoUrl] = useState('');
+  const [totemInstName, setTotemInstName] = useState('');
   const [configLoaded, setConfigLoaded] = useState(false);
 
   const institutionIdRef = useRef(institutionId);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     institutionIdRef.current = institutionId;
@@ -61,6 +64,8 @@ function TotemInner() {
           const config = data.config || {};
           setCategories(config.departamentos || ['Atención General']);
           setOirsDepartamento(config.oirs_departamento || 'OIRS');
+          setTotemLogoUrl(config.logo_url || data.config?.logo_url || '');
+          setTotemInstName(data.name || '');
           setConfigLoaded(true);
         }
 
@@ -82,9 +87,11 @@ function TotemInner() {
       }
     };
     fetchConfig();
+    return () => { if (resetTimerRef.current) clearTimeout(resetTimerRef.current); };
   }, [institutionId]);
 
   const resetFlow = () => {
+    if (resetTimerRef.current) { clearTimeout(resetTimerRef.current); resetTimerRef.current = null; }
     setScreen('menu');
     setSelectedMode(null);
     setSelectedFuncionario(null);
@@ -97,7 +104,11 @@ function TotemInner() {
 
   const handleModeSelect = (mode: 'general' | 'oirs' | 'appointment') => {
     setSelectedMode(mode);
-    setScreen('rut');
+    if (mode === 'oirs') {
+      handleOirsDirect();
+    } else {
+      setScreen('rut');
+    }
   };
 
   const handleCategorySelect = (cat: string) => {
@@ -141,6 +152,73 @@ function TotemInner() {
     const body = raw.slice(0, -1);
     const dv = raw.slice(-1);
     return `${body}-${dv}`;
+  };
+
+  const handleOirsDirect = async () => {
+    const instId = institutionIdRef.current;
+    if (!instId) return;
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      const instRef = doc(db, 'institutions', instId);
+      const turnoRef = doc(collection(db, 'turnos'));
+      let newNumero = 1;
+      const departamento = oirsDepartamento;
+      let letraTicket = departamento.charAt(0).toUpperCase();
+      const result = await runTransaction(db, async (transaction) => {
+        const instDoc = await transaction.get(instRef);
+        const santiagoNowStr = new Date().toLocaleString("en-US", {timeZone: "America/Santiago"});
+        const nowSCL = new Date(santiagoNowStr);
+        const resetTimeSCL = new Date(nowSCL.getFullYear(), nowSCL.getMonth(), nowSCL.getDate(), 7, 0, 0, 0);
+        let currentNumero = 0;
+        let lastReset = null;
+        if (!instDoc.exists()) {
+          transaction.set(instRef, { currentTurno: 0, ultimo_reinicio: null }, { merge: true });
+        } else {
+          currentNumero = instDoc.data()?.currentTurno || 0;
+          lastReset = instDoc.data()?.ultimo_reinicio || null;
+        }
+        let shouldReset = false;
+        if (nowSCL >= resetTimeSCL) {
+          if (!lastReset) shouldReset = true;
+          else {
+            const lastResetSCL = new Date(new Date(lastReset).toLocaleString("en-US", {timeZone: "America/Santiago"}));
+            if (lastResetSCL < resetTimeSCL) shouldReset = true;
+          }
+        } else {
+          const yesterdayResetSCL = new Date(resetTimeSCL);
+          yesterdayResetSCL.setDate(yesterdayResetSCL.getDate() - 1);
+          if (!lastReset) shouldReset = true;
+          else {
+            const lastResetSCL = new Date(new Date(lastReset).toLocaleString("en-US", {timeZone: "America/Santiago"}));
+            if (lastResetSCL < yesterdayResetSCL) shouldReset = true;
+          }
+        }
+        if (shouldReset) { currentNumero = 0; lastReset = new Date().toISOString(); }
+        newNumero = currentNumero + 1;
+        transaction.update(instRef, { currentTurno: newNumero, ultimo_reinicio: lastReset });
+        transaction.set(turnoRef, {
+          institution_id: instId,
+          numero: newNumero,
+          letra_ticket: letraTicket,
+          departamento_solicitado: departamento,
+          rut_usuario: '',
+          estado: 'espera',
+          created_at: nowSCL.toISOString(),
+          priority: false, priority_level: 0, is_appointment: false,
+          funcionario_id: null, funcionario_nombre: null,
+          llamado_en: null, box: null
+        });
+        return { newNumero, letraTicket, departamento };
+      });
+      setTicket({ numero: result.newNumero, letra_ticket: result.letraTicket, departamento: result.departamento, priority: false });
+      setScreen('ticket');
+      triggerWebhook('ingreso', { numero: result.newNumero, institution_id: instId, is_appointment: false });
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg('Error al generar turno OIRS.');
+    }
+    setLoading(false);
   };
 
   const handleSubmit = async (overrideCategory?: string, overrideFuncionario?: any) => {
@@ -248,6 +326,8 @@ function TotemInner() {
           estado: 'espera',
           created_at: nowSCL.toISOString(),
           priority: isAppointment,
+          priority_level: isAppointment ? 2 : 0,
+          is_appointment: isAppointment,
           funcionario_id: isAppointment && finalFunc ? finalFunc.id : null,
           funcionario_nombre: isAppointment && finalFunc ? finalFunc.nombre : null,
           llamado_en: null,
@@ -282,7 +362,8 @@ function TotemInner() {
       });
       setTimeout(() => socket.disconnect(), 2000);
 
-      setTimeout(resetFlow, 10000);
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = setTimeout(resetFlow, 20000);
     } catch (err: any) {
       console.error(err);
       setErrorMsg('Error al generar el turno.');
@@ -323,6 +404,10 @@ function TotemInner() {
     return (
       <main className={styles.container}>
         <div className={styles.glassPanel}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', justifyContent: 'center', marginBottom: '0.5rem' }}>
+            {totemLogoUrl && <img src={totemLogoUrl} alt="Logo" style={{ height: '60px', width: 'auto', borderRadius: '12px' }} />}
+            {totemInstName && <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>{totemInstName}</span>}
+          </div>
           <h1 className={styles.title}>Bienvenido</h1>
           <p className={styles.subtitle}>Seleccione el tipo de atención que necesita</p>
 

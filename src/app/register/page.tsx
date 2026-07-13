@@ -38,6 +38,18 @@ export default function RegisterPage() {
   // Common auth fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fromJoin, setFromJoin] = useState('');
+
+  // Pre-select institution from ?join=instId query param
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const joinId = params.get('join');
+    if (joinId) {
+      setSelectedInstId(joinId);
+      setFromJoin(joinId);
+      setMode('funcionario');
+    }
+  }, []);
 
   // Fetch institutions when funcionario mode is selected
   useEffect(() => {
@@ -121,7 +133,7 @@ export default function RegisterPage() {
     setLoading(false);
   };
 
-  const goBack = () => { setMode('select'); setStep(1); setError(''); setSelectedInstId(''); };
+  const goBack = () => { if (fromJoin) { router.push('/'); return; } setMode('select'); setStep(1); setError(''); setSelectedInstId(''); };
 
   /* ── Success screen ─────────────────────────────────────────────────────── */
   if (done) {

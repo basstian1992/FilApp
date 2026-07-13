@@ -131,7 +131,7 @@
   gap: 0.75rem;
 }
 
-.audioToggle, .themeToggle {
+.audioToggle, .themeToggle, .voicePreviewBtn {
   background: var(--tv-glass-bg);
   border: 1px solid var(--tv-border-strong);
   color: var(--tv-text-muted);
@@ -144,10 +144,34 @@
   justify-content: center;
 }
 
-.audioToggle:hover, .themeToggle:hover {
+.audioToggle:hover, .themeToggle:hover, .voicePreviewBtn:hover {
   background: var(--tv-bg-medium);
   color: var(--tv-text-primary);
   transform: scale(1.05);
+}
+
+.voiceSelectorWrap {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.voiceSelect {
+  background: var(--tv-glass-bg);
+  border: 1px solid var(--tv-border-strong);
+  color: var(--tv-text-primary);
+  font-size: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 10px;
+  cursor: pointer;
+  max-width: 180px;
+  outline: none;
+  font-family: inherit;
+}
+
+.voiceSelect option {
+  background: var(--tv-bg-dark);
+  color: var(--tv-text-primary);
 }
 
 .audioToggle[data-active="true"] {
@@ -265,6 +289,19 @@
   font-size: 4.5rem;
   font-weight: 900;
   text-shadow: 0 0 30px rgba(56, 189, 248, 0.4);
+}
+
+.callPatient {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--tv-text-primary);
+  margin-top: 0.5rem;
+  padding: 0.5rem 2.5rem;
+  border-radius: 100px;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--tv-border);
+  backdrop-filter: blur(10px);
 }
 
 .callStaff {

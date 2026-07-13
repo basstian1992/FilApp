@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { db } from '@/lib/firebase/client';
-import { collection, query, where, getDocs, setDoc, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, setDoc, doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { UserData } from './UserForm';
-import { Search, Download, Upload, Edit, Save, X, FileSpreadsheet } from 'lucide-react';
+import { Search, Download, Upload, Edit, Save, X, FileSpreadsheet, Trash2 } from 'lucide-react';
 import UserForm from './UserForm';
 import { useToast } from '@/components/Toast';
 import * as XLSX from 'xlsx';
@@ -22,6 +22,7 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingRut, setEditingRut] = useState<string | null>(null);
+  const [deletingRut, setDeletingRut] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchUsers = async () => {
@@ -215,6 +216,20 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
     e.target.value = '';
   };
 
+  const handleDeleteUser = async (rut: string, nombre: string) => {
+    if (!window.confirm(`¿Eliminar al usuario "${nombre || rut}"?\n\nEsta acción no se puede deshacer.`)) return;
+    setDeletingRut(rut);
+    try {
+      await deleteDoc(doc(db, 'usuarios', rut));
+      setUsers(prev => prev.filter(u => u.rut !== rut));
+      toast(`Usuario ${rut} eliminado.`);
+    } catch (err: any) {
+      console.error('Error deleting user:', err);
+      toast('Error al eliminar usuario: ' + err.message, 'error');
+    }
+    setDeletingRut(null);
+  };
+
   const filteredUsers = users.filter(u => 
     u.rut.toLowerCase().includes(searchTerm.toLowerCase()) || 
     (u.nombre_completo && u.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -282,7 +297,7 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
                   <th style={{ padding: '1rem' }}>Teléfono</th>
                   <th style={{ padding: '1rem' }}>Comuna</th>
                   <th style={{ padding: '1rem' }}>Última Modificación</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Acción</th>
+                  <th style={{ padding: '1rem', textAlign: 'center' }} colSpan={role === 'admin' || role === 'gerente' ? 2 : 1}>Acción</th>
                 </tr>
               </thead>
               <tbody>
@@ -313,6 +328,18 @@ export default function UserDirectory({ institutionId, funcionarioId, funcionari
                           <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Solo lectura</span>
                         )}
                       </td>
+                      {(role === 'admin' || role === 'gerente') && (
+                        <td style={{ padding: '1rem', textAlign: 'center' }}>
+                          <button
+                            onClick={() => handleDeleteUser(u.rut, u.nombre_completo || u.rut)}
+                            disabled={deletingRut === u.rut}
+                            style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--destructive)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '0.5rem 0.8rem', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}
+                            title="Eliminar usuario"
+                          >
+                            <Trash2 size={14} /> {deletingRut === u.rut ? '...' : 'Eliminar'}
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))
                 )}

@@ -284,9 +284,8 @@
 .callPatient {
   font-size: 4rem;
   font-weight: 900;
-  background: var(--tv-call-grad);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--tv-primary, #5B21B6);
+  background: rgba(255,255,255,0.08);
   margin-top: 0.5rem;
   padding: 0.5rem 2.5rem;
   border-radius: 100px;
@@ -555,6 +554,7 @@
   }
   .callPatient {
     font-size: 6rem;
+    background: rgba(255,255,255,0.1);
   }
   .callModule {
     font-size: 2.5rem;

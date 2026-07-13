@@ -107,11 +107,17 @@ export default function StaffPage() {
   const [testSent, setTestSent] = useState(false);
   const [testError, setTestError] = useState('');
 
+  // WhatsApp refs to avoid stale closures inside onSnapshot / polling
+  const whatsappPhoneRef = useRef('');
+  const whatsappApiKeyRef = useRef('');
+
   // Manual Turno State
   const [manualRut, setManualRut] = useState('');
 
   const funcionarioRef = useRef<Funcionario | null>(null);
   const isFirstEspera = useRef(true);
+  const knownTurnoIdsRef = useRef<Set<string>>(new Set());
+  const lastRemindedRef = useRef<Map<string, number>>(new Map()); // turnoId -> last reminder timestamp
   const isFirstLoad = useRef(true);
   const socketRef = useRef<any>(null);
   // onSnapshot unsubscribe handles (to avoid memory leaks)
@@ -123,6 +129,14 @@ export default function StaffPage() {
   useEffect(() => {
     funcionarioRef.current = funcionario;
   }, [funcionario]);
+
+  useEffect(() => {
+    whatsappPhoneRef.current = whatsappPhone;
+  }, [whatsappPhone]);
+
+  useEffect(() => {
+    whatsappApiKeyRef.current = whatsappApiKey;
+  }, [whatsappApiKey]);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
@@ -191,7 +205,7 @@ export default function StaffPage() {
 
           setTimeout(() => {
             setNotifications(prev => prev.slice(1));
-          }, 8000);
+    }, 5000);
         });
       } catch (e) {
         console.log('Socket.io no disponible, usando Firestore en tiempo real');
@@ -226,6 +240,8 @@ export default function StaffPage() {
           funcionarioRef.current = specData;
           setWhatsappPhone(specData.whatsapp_phone || '');
           setWhatsappApiKey(specData.whatsapp_apikey || '');
+          whatsappPhoneRef.current = specData.whatsapp_phone || '';
+          whatsappApiKeyRef.current = specData.whatsapp_apikey || '';
 
           if (isFirstLoad.current) {
             isFirstLoad.current = false;
@@ -248,22 +264,35 @@ export default function StaffPage() {
   };
 
   const sendWa = (phone: string, key: string, msg: string) => {
-    if (whatsappPending.has(phone)) return;
+    if (whatsappPending.has(phone)) {
+      // Check if the pending entry is stale (>20s) — prevents blocking from previous session
+      const lastSent = whatsappCooldowns.get(phone) || 0;
+      if (Date.now() - lastSent > 20000) {
+        whatsappPending.delete(phone);
+      } else {
+        return;
+      }
+    }
     const lastSent = whatsappCooldowns.get(phone) || 0;
     if (Date.now() - lastSent <= WHATSAPP_COOLDOWN_MS) return;
     whatsappPending.add(phone);
     whatsappCooldowns.set(phone, Date.now());
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     fetch('/api/whatsapp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, message: msg, apikey: key.trim() })
+      body: JSON.stringify({ phone, message: msg, apikey: key.trim() }),
+      signal: controller.signal
     }).then(r => r.json()).then(d => {
+      clearTimeout(timeout);
       whatsappPending.delete(phone);
       if (!d.success && !d.error?.includes('Too many requests')) {
         console.error('WhatsApp error:', d.error);
         toast('Error WhatsApp: ' + (d.error || 'desconocido'), 'error');
       } else console.log('WhatsApp enviado a:', phone, 'respuesta:', d);
     }).catch(err => {
+      clearTimeout(timeout);
       whatsappPending.delete(phone);
       console.error('Error al enviar WhatsApp:', err);
       toast('Error al enviar WhatsApp: ' + err.message, 'error');
@@ -271,7 +300,7 @@ export default function StaffPage() {
   };
 
   const sendWaNotification = (phone: string, key: string, ticketStr: string, deptoStr: string, queueCount: number, isAppointment?: boolean) => {
-    if (!phone || !key) return;
+    if (!phone || !key) { console.log('[WA] sendWaNotification omitido: phone o key vacío', { phone: !!phone, key: !!key }); return; }
     const priorityTag = isAppointment ? '🔔 *ALTA PRIORIDAD* ' : '';
     const msg = `${priorityTag}🔔 *FilApp - Nuevo Turno*\nSe ha solicitado un nuevo turno en tu módulo de *${deptoStr}*.\n🎫 *Turno:* ${ticketStr}\n👥 *Personas en cola:* ${queueCount}\nIngresa al panel para atender.`;
     sendWa(phone, key, msg);
@@ -305,8 +334,8 @@ export default function StaffPage() {
         return timeA - timeB;
       });
 
-      const waPhone = currentFunc?.whatsapp_phone || whatsappPhone;
-      const waKey = currentFunc?.whatsapp_apikey || whatsappApiKey;
+      const waPhone = currentFunc?.whatsapp_phone || whatsappPhoneRef.current;
+      const waKey = currentFunc?.whatsapp_apikey || whatsappApiKeyRef.current;
 
       if (!isFirstEspera.current) {
         snap.docChanges().forEach((change: any) => {
@@ -318,10 +347,14 @@ export default function StaffPage() {
               const deptoStr = newTurno.departamento_solicitado || currentFunc.departamento;
               const isAppt = newTurno.is_appointment || newTurno.priority;
 
+              console.log('[WA] Nuevo turno detectado:', ticketStr, 'waPhone:', waPhone, 'waKey:', waKey ? '***' : 'vacio');
+
               playDing();
               toast(`${isAppt ? '📅 ' : ''}Nuevo turno ${ticketStr} para ${deptoStr}${isAppt ? ' (Hora Agendada)' : ''}`);
 
               sendWaNotification(waPhone, waKey, ticketStr, deptoStr, queueCount, isAppt);
+            } else {
+              console.log('[WA] Turno ignorado (departamento no coincide):', newTurno.letra_ticket, newTurno.numero, 'deptoTurno:', newTurno.departamento_solicitado, 'deptoFunc:', currentFunc?.departamento);
             }
           }
         });
@@ -329,12 +362,14 @@ export default function StaffPage() {
         // Re-notify for turnos waiting >10 minutes
         if (waPhone && waKey && currentFunc) {
           const now = Date.now();
+          const reminded = lastRemindedRef.current;
           filtered.forEach((t: any) => {
             const created = new Date(t.created_at || 0).getTime();
             if (created > 0 && now - created > 600000) { // >10 min
-              const oldTicket = `${t.letra_ticket || 'T'}-${t.numero}`;
-              const lastSent = whatsappCooldowns.get(waPhone) || 0;
-              if (now - lastSent > WHATSAPP_COOLDOWN_MS) {
+              const lastRemind = reminded.get(t.id) || 0;
+              if (now - lastRemind > 600000) {
+                reminded.set(t.id, now);
+                const oldTicket = `${t.letra_ticket || 'T'}-${t.numero}`;
                 const msg = `⏰ *FilApp - Recordatorio*\nEl turno *${oldTicket}* lleva más de 10 minutos esperando en *${currentFunc.departamento}*.\n👥 *Personas en cola:* ${filtered.length}\nPor favor, revisa el panel para atender.`;
                 sendWa(waPhone, waKey, msg);
               }
@@ -343,6 +378,7 @@ export default function StaffPage() {
         }
       }
       isFirstEspera.current = false;
+      knownTurnoIdsRef.current = new Set(filtered.map((t: any) => t.id));
 
       setQueueDocs(filtered);
     };
@@ -355,7 +391,8 @@ export default function StaffPage() {
     // Primary real-time listener
     unsubQueueRef.current = onSnapshot(qEspera, handleEsperaSnap, handleEsperaError);
 
-    // Fallback polling every 8 seconds in case onSnapshot fails silently
+    // Fallback polling every 5 seconds in case onSnapshot fails silently
+    let isFirstPoll = true;
     const pollInterval = setInterval(async () => {
       try {
         const snap = await getDocs(qEspera);
@@ -372,6 +409,50 @@ export default function StaffPage() {
           const timeB = new Date(b.created_at || 0).getTime();
           return timeA - timeB;
         });
+        const currentIds = new Set(filtered.map((t: any) => t.id));
+        if (isFirstPoll) {
+          // First poll: just seed known IDs, don't send notifications
+          // (the onSnapshot already handled the initial state)
+          isFirstPoll = false;
+          knownTurnoIdsRef.current = currentIds;
+        } else {
+          // Detect new turnos that the onSnapshot might have missed
+          const prevIds = knownTurnoIdsRef.current;
+          const newIds = [...currentIds].filter(id => !prevIds.has(id));
+          const waPhone = currentFunc?.whatsapp_phone || whatsappPhoneRef.current;
+          const waKey = currentFunc?.whatsapp_apikey || whatsappApiKeyRef.current;
+          if (newIds.length > 0 && currentFunc) {
+            for (const newId of newIds) {
+              const newTurno = filtered.find((t: any) => t.id === newId);
+              if (newTurno) {
+                const queueCount = filtered.length;
+                const ticketStr = `${newTurno.letra_ticket || 'T'}-${newTurno.numero}`;
+                const deptoStr = newTurno.departamento_solicitado || currentFunc.departamento;
+                const isAppt = newTurno.is_appointment || newTurno.priority;
+                sendWaNotification(waPhone, waKey, ticketStr, deptoStr, queueCount, isAppt);
+              }
+            }
+          }
+          knownTurnoIdsRef.current = currentIds;
+
+          // 10-minute reminder: re-notify funcionario for turnos waiting >10 min (every 10 min)
+          if (waPhone && waKey && currentFunc) {
+            const now = Date.now();
+            const reminded = lastRemindedRef.current;
+            filtered.forEach((t: any) => {
+              const created = new Date(t.created_at || 0).getTime();
+              if (created > 0 && now - created > 600000) {
+                const lastRemind = reminded.get(t.id) || 0;
+                if (now - lastRemind > 600000) {
+                  reminded.set(t.id, now);
+                  const oldTicket = `${t.letra_ticket || 'T'}-${t.numero}`;
+                  const msg = `⏰ *FilApp - Recordatorio*\nEl turno *${oldTicket}* lleva más de 10 minutos esperando en *${currentFunc.departamento}*.\n👥 *Personas en cola:* ${filtered.length}\nPor favor, revisa el panel para atender.`;
+                  sendWa(waPhone, waKey, msg);
+                }
+              }
+            });
+          }
+        }
         setQueueDocs(prev => {
           // Only update if content actually changed
           if (prev.length !== filtered.length) return filtered;
@@ -381,7 +462,7 @@ export default function StaffPage() {
           return prev;
         });
       } catch (e) { /* polling fallback error, ignore */ }
-    }, 8000);
+    }, 5000);
 
     pollIntervalRef.current = pollInterval;
 
@@ -506,6 +587,10 @@ export default function StaffPage() {
         whatsapp_phone: cleanPhone,
         whatsapp_apikey: cleanKey
       });
+      setWhatsappPhone(cleanPhone);
+      setWhatsappApiKey(cleanKey);
+      whatsappPhoneRef.current = cleanPhone;
+      whatsappApiKeyRef.current = cleanKey;
 
       setTestSent(true);
     } catch (err: any) {
@@ -531,6 +616,10 @@ export default function StaffPage() {
         whatsapp_phone: '',
         whatsapp_apikey: ''
       });
+      setWhatsappPhone('');
+      setWhatsappApiKey('');
+      whatsappPhoneRef.current = '';
+      whatsappApiKeyRef.current = '';
 
       setWhatsappPhone('');
       setWhatsappApiKey('');

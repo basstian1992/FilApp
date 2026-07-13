@@ -251,17 +251,6 @@ function TotemInner() {
       const finalCategory = overrideCategory || selectedCategory;
       const finalFunc = overrideFuncionario || selectedFuncionario;
 
-      const departamento = selectedMode === 'oirs'
-        ? oirsDepartamento
-        : selectedMode === 'appointment'
-          ? (finalFunc ? (finalFunc.departamento || 'Hora Agendada') : (finalCategory || 'Hora Agendada'))
-          : finalCategory;
-
-      let letraTicket = departamento.charAt(0).toUpperCase();
-      if (selectedMode === 'appointment' && finalFunc) {
-        letraTicket = finalFunc.letra_atencion || departamento.charAt(0).toUpperCase();
-      }
-
       const result = await runTransaction(db, async (transaction) => {
         const instDoc = await transaction.get(instRef);
         const santiagoNowStr = new Date().toLocaleString("en-US", {timeZone: "America/Santiago"});
@@ -358,7 +347,7 @@ function TotemInner() {
       socket.emit('appointment-arrived', {
         institutionId: instId,
         funcionarioId: selectedFuncionario?.user_id,
-        ticket: { numero: newNumero, letra_ticket: letraTicket, departamento, rut_usuario: formattedRut },
+        ticket: { numero: result.newNumero, letra_ticket: result.letraTicket, departamento: result.departamento, rut_usuario: formattedRut },
       });
       setTimeout(() => socket.disconnect(), 2000);
 

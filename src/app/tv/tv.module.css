@@ -355,6 +355,14 @@
   100% { transform: translateX(0) scale(1); opacity: 1; }
 }
 
+.ingresoRut {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--tv-text-muted);
+  margin-top: 0.15rem;
+}
+
 .ingresoEmpty {
   color: var(--tv-text-dim);
   font-size: 1.1rem;
@@ -568,6 +576,9 @@
   .ingresoItem {
     font-size: 2rem;
     padding: 0.75rem 2rem;
+  }
+  .ingresoRut {
+    font-size: 0.85rem;
   }
   .historySection {
     border-radius: 60px;

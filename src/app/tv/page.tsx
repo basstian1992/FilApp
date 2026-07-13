@@ -471,11 +471,9 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
             <span className={styles.callLabel}>Atendiendo a</span>
             {currentCall ? (
               <>
-                {(currentUserName || currentCall.rut_usuario) && (
-                  <div className={styles.callPatient}>
-                    {currentUserName || currentCall.rut_usuario}
-                  </div>
-                )}
+                <div className={styles.callPatient}>
+                  {currentUserName || currentCall.rut_usuario || `Turno ${currentCall.letra_ticket ? currentCall.letra_ticket.charAt(0).toUpperCase() + '-' : ''}${currentCall.numero}`}
+                </div>
                 {(currentCall.departamento || currentCall.letra_especialista) && (
                   <div className={styles.callModule}>
                     Diríjase{' '}
@@ -487,7 +485,7 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
                   </div>
                 )}
                 <div className={styles.callTurnoSmall}>
-                  Su turno es {currentCall.letra_ticket ? `${currentCall.letra_ticket}-` : ''}{currentCall.numero}
+                  Su turno es {currentCall.letra_ticket ? `${currentCall.letra_ticket.charAt(0).toUpperCase()}-` : ''}{currentCall.numero}
                 </div>
                 {currentCall.nombre_funcionario && (
                   <div className={styles.callStaff}>
@@ -504,11 +502,15 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
             <span className={styles.ingresosLabel}>Ingresos</span>
             <div className={styles.ingresosList}>
               {nuevosIngresos.length > 0 ? (
-                nuevosIngresos.map(ing => (
-                  <div key={ing.id} className={styles.ingresoItem}>
-                    {ing.letra_ticket ? `${ing.letra_ticket}-` : ''}{ing.numero}
-                  </div>
-                ))
+                nuevosIngresos.map(ing => {
+                  const ingTicketLetter = ing.letra_ticket ? ing.letra_ticket.charAt(0).toUpperCase() : '';
+                  return (
+                    <div key={ing.id} className={styles.ingresoItem}>
+                      {ingTicketLetter ? `${ingTicketLetter}-` : ''}{ing.numero}
+                      {ing.rut_usuario && <span className={styles.ingresoRut}>{ing.rut_usuario}</span>}
+                    </div>
+                  );
+                })
               ) : (
                 <span className={styles.ingresoEmpty}>Sin ingresos recientes</span>
               )}

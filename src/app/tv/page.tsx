@@ -468,27 +468,30 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
       <div className={styles.mainContent}>
         <section className={styles.callSection}>
           <div className={styles.currentCallCard} key={currentCall?.id || 'empty'}>
-            <span className={styles.callLabel}>Turno Actual</span>
+            <span className={styles.callLabel}>Atendiendo a</span>
             {currentCall ? (
               <>
-                <div className={styles.callTurno}>
-                  {currentCall.letra_ticket ? `${currentCall.letra_ticket}-` : ''}{currentCall.numero}
-                </div>
                 {(currentUserName || currentCall.rut_usuario) && (
                   <div className={styles.callPatient}>
-                    {currentUserName || `RUT: ${currentCall.rut_usuario}`}
+                    {currentUserName || currentCall.rut_usuario}
                   </div>
                 )}
-                {currentCall.letra_especialista && (
+                {(currentCall.departamento || currentCall.letra_especialista) && (
                   <div className={styles.callModule}>
-                    Diríjase al Módulo{' '}
-                    <span className={styles.callModuleHighlight}>{currentCall.letra_especialista}</span>
+                    Diríjase{' '}
+                    {currentCall.departamento ? (
+                      <>al Módulo <span className={styles.callModuleHighlight}>{currentCall.departamento}</span></>
+                    ) : (
+                      <>al Módulo <span className={styles.callModuleHighlight}>{currentCall.letra_especialista}</span></>
+                    )}
                   </div>
                 )}
+                <div className={styles.callTurnoSmall}>
+                  Su turno es {currentCall.letra_ticket ? `${currentCall.letra_ticket}-` : ''}{currentCall.numero}
+                </div>
                 {currentCall.nombre_funcionario && (
                   <div className={styles.callStaff}>
                     Atendido por {currentCall.nombre_funcionario}
-                    {currentCall.departamento ? ` (${currentCall.departamento})` : ''}
                   </div>
                 )}
               </>

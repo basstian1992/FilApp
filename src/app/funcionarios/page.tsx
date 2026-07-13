@@ -117,6 +117,7 @@ export default function StaffPage() {
   const unsubProfileRef = useRef<(() => void) | null>(null);
   const unsubQueueRef   = useRef<(() => void) | null>(null);
   const unsubActivoRef  = useRef<(() => void) | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     funcionarioRef.current = funcionario;
@@ -136,6 +137,7 @@ export default function StaffPage() {
       unsubProfileRef.current?.();
       unsubQueueRef.current?.();
       unsubActivoRef.current?.();
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
   }, []);
 
@@ -284,15 +286,16 @@ export default function StaffPage() {
       where('estado', '==', 'espera'),
       where('institution_id', '==', institutionId)
     );
-    unsubQueueRef.current = onSnapshot(qEspera, (snap) => {
+
+    const handleEsperaSnap = (snap: any) => {
       const currentFunc = funcionarioRef.current;
-      const allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      const allDocs = snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as any));
 
       const filtered = currentFunc
-        ? allDocs.filter(d => d.departamento_solicitado === currentFunc.departamento)
+        ? allDocs.filter((d: any) => d.departamento_solicitado === currentFunc.departamento)
         : allDocs;
 
-      filtered.sort((a, b) => {
+      filtered.sort((a: any, b: any) => {
         const pa = a.priority_level ?? (a.priority ? 2 : 0);
         const pb = b.priority_level ?? (b.priority ? 2 : 0);
         if (pb !== pa) return pb - pa;
@@ -302,7 +305,7 @@ export default function StaffPage() {
       });
 
       if (!isFirstEspera.current) {
-        snap.docChanges().forEach((change) => {
+        snap.docChanges().forEach((change: any) => {
           if (change.type === 'added') {
             const newTurno = change.doc.data();
             if (currentFunc && currentFunc.departamento === newTurno.departamento_solicitado) {
@@ -324,7 +327,7 @@ export default function StaffPage() {
         const waKey = currentFunc?.whatsapp_apikey || whatsappApiKey;
         if (waPhone && waKey && currentFunc) {
           const now = Date.now();
-          filtered.forEach(t => {
+          filtered.forEach((t: any) => {
             const created = new Date(t.created_at || 0).getTime();
             if (created > 0 && now - created > 600000) { // >10 min
               const oldTicket = `${t.letra_ticket || 'T'}-${t.numero}`;
@@ -340,7 +343,45 @@ export default function StaffPage() {
       isFirstEspera.current = false;
 
       setQueueDocs(filtered);
-    });
+    };
+
+    const handleEsperaError = (err: any) => {
+      console.error('Error en listener de turnos (posible índice faltante):', err);
+      toast('Error en actualización en tiempo real. Usando modo de respaldo.', 'warning');
+    };
+
+    // Primary real-time listener
+    unsubQueueRef.current = onSnapshot(qEspera, handleEsperaSnap, handleEsperaError);
+
+    // Fallback polling every 8 seconds in case onSnapshot fails silently
+    const pollInterval = setInterval(async () => {
+      try {
+        const snap = await getDocs(qEspera);
+        const currentFunc = funcionarioRef.current;
+        const allDocs = snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as any));
+        const filtered = currentFunc
+          ? allDocs.filter((d: any) => d.departamento_solicitado === currentFunc.departamento)
+          : allDocs;
+        filtered.sort((a: any, b: any) => {
+          const pa = a.priority_level ?? (a.priority ? 2 : 0);
+          const pb = b.priority_level ?? (b.priority ? 2 : 0);
+          if (pb !== pa) return pb - pa;
+          const timeA = new Date(a.created_at || 0).getTime();
+          const timeB = new Date(b.created_at || 0).getTime();
+          return timeA - timeB;
+        });
+        setQueueDocs(prev => {
+          // Only update if content actually changed
+          if (prev.length !== filtered.length) return filtered;
+          for (let i = 0; i < prev.length; i++) {
+            if (prev[i].id !== filtered[i]?.id) return filtered;
+          }
+          return prev;
+        });
+      } catch (e) { /* polling fallback error, ignore */ }
+    }, 8000);
+
+    pollIntervalRef.current = pollInterval;
 
     const qActivo = query(collection(db, 'turnos'), where('especialista_id', '==', specId));
     unsubActivoRef.current = onSnapshot(qActivo, async (snap) => {
@@ -384,6 +425,7 @@ export default function StaffPage() {
     unsubProfileRef.current?.();
     unsubQueueRef.current?.();
     unsubActivoRef.current?.();
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     await signOut(auth);
   };
 

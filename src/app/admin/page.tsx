@@ -120,6 +120,8 @@ export default function AdminPage() {
   const [funcInstId, setFuncInstId] = useState(''); // institution to assign to new admin
   const [funcMsg, setFuncMsg] = useState('');
   const [funcLoading, setFuncLoading] = useState(false);
+  const [adminMsg, setAdminMsg] = useState('');
+  const [adminLoading, setAdminLoading] = useState(false);
   const [resetting, setResetting] = useState(false);
 
   /* ── Auth effect ─────────────────────────────────────────────────────────── */
@@ -394,6 +396,42 @@ export default function AdminPage() {
       }
     }
     setFuncLoading(false);
+  };
+
+  const handleRegisterAdminByAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!institutionId) return;
+    setAdminLoading(true); setAdminMsg('');
+    try {
+      const newUid = await createUserSecondary(funcEmail, funcPass);
+      await setDoc(doc(db, 'especialistas', newUid), {
+        user_id: newUid,
+        institution_id: institutionId,
+        role: 'admin',
+        nombre: funcNombre || 'Administrador',
+        departamento: 'Administración',
+        cargo: funcCargo || 'Administrador',
+        estado_funcionario: 'activo',
+        avatar_url: '',
+        letra_atencion: funcLetra || funcEmail.split('@')[0].substring(0, 2).toUpperCase(),
+        whatsapp_phone: '',
+        whatsapp_apikey: '',
+        email: funcEmail,
+      });
+      setAdminMsg(`✅ Administrador "${funcNombre}" registrado en ${institutionName}.`);
+      setFuncEmail(''); setFuncPass(''); setFuncNombre(''); setFuncCargo(''); setFuncLetra('');
+      await loadDashboard(userProfile.user_id, userProfile.role);
+    } catch (err: any) {
+      const code = err.code;
+      if (code === 'auth/email-already-in-use') {
+        setAdminMsg('❌ Ese correo ya está registrado en el sistema.');
+      } else if (code === 'auth/weak-password') {
+        setAdminMsg('❌ La contraseña debe tener al menos 6 caracteres.');
+      } else {
+        setAdminMsg(`❌ Error: ${err.message}`);
+      }
+    }
+    setAdminLoading(false);
   };
 
   const updateFuncionario = async (id: string, field: string, value: string) => {
@@ -1036,8 +1074,78 @@ export default function AdminPage() {
                   </div>
                 )}
 
+                {/* ── Administradores de la institución ──────────────────── */}
+                {institutionId && (
+                  <div className={styles.card} style={{ marginTop: pendingFuncionarios.length > 0 ? '1.25rem' : 0 }}>
+                    <div className={styles.cardHead}>
+                      <Shield size={18} className={styles.cardHeadIcon} />
+                      <h2>Administradores de {institutionName}</h2>
+                    </div>
+                    <p className={styles.cardDesc}>Registra otros administradores para que gestionen esta institución.</p>
+
+                    {/* Admin registration form */}
+                    <form onSubmit={handleRegisterAdminByAdmin} className={styles.userForm}>
+                      {adminMsg && <div className={adminMsg.startsWith('✅') ? styles.msgSuccess : styles.msgError}>{adminMsg}</div>}
+                      <div className={styles.formRow}>
+                        <div className={styles.formGroup}>
+                          <label>Nombre Completo</label>
+                          <input type="text" value={funcNombre} onChange={e => setFuncNombre(e.target.value)} placeholder="Juan Pérez" required />
+                        </div>
+                        <div className={styles.formGroup}>
+                          <label>Correo Electrónico</label>
+                          <input type="email" value={funcEmail} onChange={e => setFuncEmail(e.target.value)} placeholder="admin@municipio.cl" required />
+                        </div>
+                        <div className={styles.formGroup}>
+                          <label>Contraseña Temporal</label>
+                          <input type="password" value={funcPass} onChange={e => setFuncPass(e.target.value)} minLength={6} required />
+                        </div>
+                        <div className={styles.formGroup}>
+                          <label>Cargo</label>
+                          <input value={funcCargo} onChange={e => setFuncCargo(e.target.value)} placeholder="Administrador" />
+                        </div>
+                      </div>
+                      <button type="submit" className={styles.btnPrimary} disabled={adminLoading}>
+                        {adminLoading ? 'Registrando…' : <><Shield size={15} /> Registrar Administrador</>}
+                      </button>
+                    </form>
+
+                    {/* Admin list for this institution */}
+                    <div style={{ marginTop: '1.25rem' }}>
+                      <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+                        Administradores de esta institución
+                      </h3>
+                      <div className={styles.tableWrap}>
+                        <table className={styles.table}>
+                          <thead>
+                            <tr><th>Nombre</th><th>Email</th><th>Estado</th><th>Acción</th></tr>
+                          </thead>
+                          <tbody>
+                            {allAdmins
+                              .filter(a => a.institution_id === institutionId)
+                              .map(a => (
+                              <tr key={a.id}>
+                                <td>{a.nombre}</td>
+                                <td>{a.email || '—'}</td>
+                                <td><span className={styles.chip} data-role={a.estado_funcionario === 'activo' ? 'admin' : 'funcionario'}>{a.estado_funcionario || 'inactivo'}</span></td>
+                                <td>
+                                  <button className={styles.btnDanger} onClick={() => handleDeleteAdmin(a.id, a.nombre)} style={{ padding: '0.45rem 0.9rem', fontSize: '0.82rem' }}>
+                                    <Trash2 size={13} /> Eliminar
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                            {allAdmins.filter(a => a.institution_id === institutionId).length === 0 && (
+                              <tr><td colSpan={4} className={styles.noData}>Sin administradores para esta institución.</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Register form */}
-                <div className={styles.card}>
+                <div className={styles.card} style={{ marginTop: '1.25rem' }}>
                   <div className={styles.cardHead}>
                     <UserPlus size={18} className={styles.cardHeadIcon} />
                     <h2>Registrar Funcionario</h2>

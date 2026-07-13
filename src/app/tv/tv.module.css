@@ -274,34 +274,34 @@
 }
 
 .callModule {
-  font-size: 3rem;
-  font-weight: 600;
+  font-size: 1.75rem;
+  font-weight: 500;
   color: var(--tv-text-secondary);
-  margin-top: 1rem;
+  margin-top: 0.75rem;
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .callModuleHighlight {
   color: #38bdf8;
-  font-size: 4.5rem;
-  font-weight: 900;
-  text-shadow: 0 0 30px rgba(56, 189, 248, 0.4);
+  font-size: 2.25rem;
+  font-weight: 800;
+  text-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
 }
 
 .callPatient {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: var(--tv-text-primary);
+  font-size: 4rem;
+  font-weight: 900;
+  background: var(--tv-call-grad);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   margin-top: 0.5rem;
   padding: 0.5rem 2.5rem;
   border-radius: 100px;
   z-index: 1;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid var(--tv-border);
-  backdrop-filter: blur(10px);
+  letter-spacing: -0.02em;
 }
 
 .callStaff {
@@ -555,14 +555,17 @@
   .callTurno {
     font-size: 12vw;
   }
-  .callModule {
-    font-size: 4.5rem;
-  }
-  .callModuleHighlight {
+  .callPatient {
     font-size: 6rem;
   }
-  .callStaff {
+  .callModule {
     font-size: 2.5rem;
+  }
+  .callModuleHighlight {
+    font-size: 3rem;
+  }
+  .callStaff {
+    font-size: 2rem;
     padding: 1rem 4rem;
   }
   .callLabel {

@@ -500,6 +500,29 @@
   gap: 0.5rem;
 }
 
+.patientDisplay {
+  font-size: 3.5rem;
+  font-weight: 900;
+  color: var(--primary);
+  letter-spacing: -1px;
+  line-height: 1.1;
+  word-break: break-word;
+}
+
+.turnoLabel {
+  color: var(--text-tertiary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.turnoValue {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
 .turnoDisplay {
   font-size: 5rem;
   font-weight: 900;
@@ -685,6 +708,7 @@
   }
   .panelLeft { max-width: 100%; }
   .panelRight { width: 100%; }
+  .patientDisplay { font-size: 2.5rem; }
   .turnoDisplay { font-size: 3.5rem; }
   .activeTurnoCard { padding: var(--spacing-6); }
   .actionGrid { grid-template-columns: 1fr; gap: var(--spacing-3); }
@@ -695,6 +719,7 @@
   .userInfo strong { font-size: 1rem; }
   .bigNumber { font-size: 5rem; }
   .actionBtn { font-size: 1rem; min-height: 52px; }
+  .patientDisplay { font-size: 1.75rem; }
   .turnoDisplay { font-size: 3rem; }
   .statCard { padding: var(--spacing-6); }
   .mainLayout { padding: var(--spacing-3); }

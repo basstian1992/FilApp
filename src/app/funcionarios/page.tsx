@@ -1206,12 +1206,14 @@ export default function StaffPage() {
           {currentTurno ? (
             <div className={styles.activeTurnoCard}>
               <h2>Atendiendo Actualmente</h2>
-              <div className={styles.turnoDisplay}>
-                Turno {currentTurno.letra_ticket ? `${currentTurno.letra_ticket}-` : ''}{currentTurno.numero}
+              <div className={styles.patientDisplay}>
+                {patientName || currentTurno.rut_usuario || 'Paciente'}
               </div>
               <div className={styles.patientInfo}>
-                {patientName && <p><strong>Nombre:</strong> {patientName}</p>}
-                <p><strong>RUT:</strong> {currentTurno.rut_usuario}</p>
+                {patientName && <p><strong>RUT:</strong> {currentTurno.rut_usuario}</p>}
+                <p><span className={styles.turnoLabel}>Turno </span>
+                  <span className={styles.turnoValue}>{currentTurno.letra_ticket ? `${currentTurno.letra_ticket}-` : ''}{currentTurno.numero}</span>
+                </p>
                 {(currentTurno.is_appointment || currentTurno.priority) ? (
                   <p className={styles.appointmentTag}>📅 Hora Agendada - Prioridad Alta</p>
                 ) : (

@@ -305,6 +305,9 @@ export default function StaffPage() {
         return timeA - timeB;
       });
 
+      const waPhone = currentFunc?.whatsapp_phone || whatsappPhone;
+      const waKey = currentFunc?.whatsapp_apikey || whatsappApiKey;
+
       if (!isFirstEspera.current) {
         snap.docChanges().forEach((change: any) => {
           if (change.type === 'added') {
@@ -324,8 +327,6 @@ export default function StaffPage() {
         });
 
         // Re-notify for turnos waiting >10 minutes
-        const waPhone = currentFunc?.whatsapp_phone || whatsappPhone;
-        const waKey = currentFunc?.whatsapp_apikey || whatsappApiKey;
         if (waPhone && waKey && currentFunc) {
           const now = Date.now();
           filtered.forEach((t: any) => {
@@ -1210,10 +1211,13 @@ export default function StaffPage() {
                 {patientName || currentTurno.rut_usuario || 'Paciente'}
               </div>
               <div className={styles.patientInfo}>
-                {patientName && <p><strong>RUT:</strong> {currentTurno.rut_usuario}</p>}
-                <p><span className={styles.turnoLabel}>Turno </span>
-                  <span className={styles.turnoValue}>{currentTurno.letra_ticket ? `${currentTurno.letra_ticket}-` : ''}{currentTurno.numero}</span>
+                <p>
+                  <span className={styles.turnoLabel}>Turno </span>
+                  <span className={styles.turnoValue}>
+                    {currentTurno.letra_ticket ? `${currentTurno.letra_ticket.charAt(0).toUpperCase()}-` : ''}{currentTurno.numero}
+                  </span>
                 </p>
+                <p><strong>RUT:</strong> {currentTurno.rut_usuario || '—'}</p>
                 {(currentTurno.is_appointment || currentTurno.priority) ? (
                   <p className={styles.appointmentTag}>📅 Hora Agendada - Prioridad Alta</p>
                 ) : (

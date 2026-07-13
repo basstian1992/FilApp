@@ -16,7 +16,7 @@
   --tv-glass-bg-strong: rgba(255, 255, 255, 0.7);
   --tv-history-title-bg: #e2e8f0;
   --tv-footer-bg: #e2e8f0;
-  --tv-logo-grad: linear-gradient(to right, var(--tv-primary, #2563eb), #7c3aed);
+  --tv-logo-grad: linear-gradient(to right, var(--tv-primary, #5B21B6), #7c3aed);
   --tv-call-grad: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
   --surface-color: rgba(255, 255, 255, 0.85);
   --surface-hover: rgba(255, 255, 255, 1);
@@ -25,14 +25,14 @@
   --text-tertiary: #475569;
   --border-color: rgba(148, 163, 184, 0.2);
   
-  /* Vibrant Accents */
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --primary-gradient: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  /* Vibrant Accents — adapted from logo palette (#31103D / #3C133F / #6A2925) */
+  --primary: #5B21B6;
+  --primary-hover: #4C1D95;
+  --primary-gradient: linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%);
   --primary-foreground: #ffffff;
   
-  --secondary: #0ea5e9;
-  --accent: #f59e0b;
+  --secondary: #7C3AED;
+  --accent: #6A2925;
   --success: #10b981;
   --destructive: #ef4444;
 
@@ -61,8 +61,8 @@
   --shadow-hover: 0 20px 40px -10px rgba(0, 0, 0, 0.12), 0 4px 6px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.8);
   
   /* Background Mesh */
-  --bg-mesh: radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.05) 0px, transparent 50%),
-               radial-gradient(at 100% 100%, rgba(14, 165, 233, 0.05) 0px, transparent 50%);
+  --bg-mesh: radial-gradient(at 0% 0%, rgba(91, 33, 182, 0.06) 0px, transparent 50%),
+               radial-gradient(at 100% 100%, rgba(124, 58, 237, 0.06) 0px, transparent 50%);
 }
 
 [data-theme="dark"] {
@@ -92,10 +92,10 @@
   --text-tertiary: #94a3b8;
   --border-color: rgba(255, 255, 255, 0.08);
 
-  /* Deep Neons */
-  --primary: #3b82f6;
-  --primary-hover: #60a5fa;
-  --primary-gradient: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  /* Deep Neons — logo-matched (#31103D → #8B5CF6 / #A78BFA) */
+  --primary: #8B5CF6;
+  --primary-hover: #A78BFA;
+  --primary-gradient: linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%);
   --primary-foreground: #ffffff;
   
   --success: #10b981;
@@ -105,8 +105,8 @@
   --shadow-premium: 0 10px 40px -10px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
   --shadow-hover: 0 20px 40px -10px rgba(0, 0, 0, 0.7), 0 4px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
   
-  --bg-mesh: radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.1) 0px, transparent 50%),
-               radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.1) 0px, transparent 50%);
+  --bg-mesh: radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.12) 0px, transparent 50%),
+               radial-gradient(at 100% 100%, rgba(109, 40, 217, 0.12) 0px, transparent 50%);
 }
 
 [data-theme="light"] {

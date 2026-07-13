@@ -447,11 +447,11 @@
 }
 
 .btnCall { 
-  background: linear-gradient(135deg, var(--primary), #3b82f6); 
-  box-shadow: 0 8px 25px -5px rgba(37, 99, 235, 0.5);
+  background: linear-gradient(135deg, var(--primary), #7C3AED); 
+  box-shadow: 0 8px 25px -5px rgba(91, 33, 182, 0.5);
 }
 .btnCall:hover:not(:disabled) { 
-  box-shadow: 0 12px 30px -5px rgba(37, 99, 235, 0.6);
+  box-shadow: 0 12px 30px -5px rgba(91, 33, 182, 0.6);
   transform: translateY(-2px);
 }
 

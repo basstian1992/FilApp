@@ -85,7 +85,7 @@
 }
 
 .rolePill[data-role="gerente"]    { background: rgba(139,92,246,0.12); color: #8b5cf6; border: 1px solid rgba(139,92,246,0.25); }
-.rolePill[data-role="admin"]      { background: rgba(37,99,235,0.12);  color: var(--primary); border: 1px solid rgba(37,99,235,0.25); }
+.rolePill[data-role="admin"]      { background: rgba(91,33,182,0.12);  color: var(--primary); border: 1px solid rgba(91,33,182,0.25); }
 
 .pendingBadge {
   font-size: 0.65rem;
@@ -178,7 +178,7 @@
 .btnPrimary:hover:not(:disabled) {
   background: var(--primary-hover);
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(37,99,235,0.3);
+  box-shadow: 0 6px 16px rgba(91,33,182,0.3);
 }
 
 .btnPrimary:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -542,7 +542,7 @@
 .tabBtnActive {
   background: var(--primary) !important;
   color: white !important;
-  box-shadow: 0 2px 8px rgba(37,99,235,0.35);
+  box-shadow: 0 2px 8px rgba(91,33,182,0.35);
 }
 
 .tabContent {
@@ -716,7 +716,7 @@
 }
 
 .staffStatus[data-status="activo"]     { background: rgba(16,185,129,0.12); color: var(--success); }
-.staffStatus[data-status="atendiendo"] { background: rgba(37,99,235,0.12);  color: var(--primary); }
+.staffStatus[data-status="atendiendo"] { background: rgba(91,33,182,0.12);  color: var(--primary); }
 .staffStatus[data-status="inactivo"]   { background: rgba(100,116,139,0.12); color: var(--text-secondary); }
 
 /* ── Config Grid ─────────────────────────────────────────── */
@@ -761,7 +761,7 @@
 .selectField:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+  box-shadow: 0 0 0 3px rgba(91,33,182,0.1);
 }
 
 .formGroup textarea { resize: vertical; }
@@ -890,7 +890,7 @@
 }
 
 .chip[data-role="gerente"]    { background: rgba(139,92,246,0.1); color: #8b5cf6; }
-.chip[data-role="admin"]      { background: rgba(37,99,235,0.1);  color: var(--primary); }
+.chip[data-role="admin"]      { background: rgba(91,33,182,0.1);  color: var(--primary); }
 .chip[data-role="funcionario"]{ background: rgba(16,185,129,0.1); color: var(--success); }
 
 /* ── Funcionario avatar cell ─────────────────────────────── */
@@ -980,7 +980,7 @@
   width: 52px;
   height: 52px;
   border-radius: var(--radius-lg);
-  background: rgba(37,99,235,0.1);
+  background: rgba(91,33,182,0.1);
   color: var(--primary);
   display: flex;
   align-items: center;

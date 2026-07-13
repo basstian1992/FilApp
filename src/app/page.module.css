@@ -295,16 +295,17 @@
   width: 600px;
   height: 600px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(37,99,235,0.08) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(91,33,182,0.1) 0%, transparent 70%);
   pointer-events: none;
 }
 
 .heroLogo {
   display: block;
-  width: 72px;
-  height: 72px;
+  width: 360px;
+  max-width: 90%;
+  height: auto;
   object-fit: contain;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .landingTitle {
@@ -579,7 +580,7 @@
 .primaryBtn:hover {
   background: var(--primary-hover);
   transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 8px 20px rgba(91, 33, 182, 0.35);
 }
 
 .primaryBtn:disabled {

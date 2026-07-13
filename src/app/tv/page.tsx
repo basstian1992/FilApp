@@ -474,15 +474,15 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
                 <div className={styles.callTurno}>
                   {currentCall.letra_ticket ? `${currentCall.letra_ticket}-` : ''}{currentCall.numero}
                 </div>
+                {(currentUserName || currentCall.rut_usuario) && (
+                  <div className={styles.callPatient}>
+                    {currentUserName || `RUT: ${currentCall.rut_usuario}`}
+                  </div>
+                )}
                 {currentCall.letra_especialista && (
                   <div className={styles.callModule}>
                     Diríjase al Módulo{' '}
                     <span className={styles.callModuleHighlight}>{currentCall.letra_especialista}</span>
-                  </div>
-                )}
-                {currentUserName && (
-                  <div className={styles.callPatient}>
-                    {currentUserName}
                   </div>
                 )}
                 {currentCall.nombre_funcionario && (

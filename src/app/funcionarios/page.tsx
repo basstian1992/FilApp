@@ -95,6 +95,7 @@ export default function StaffPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [activeTab, setActiveTab] = useState<'atencion' | 'directorio'>('atencion');
   const [isUserProfileComplete, setIsUserProfileComplete] = useState(false);
+  const [patientName, setPatientName] = useState('');
   const [resetLogs, setResetLogs] = useState<any[]>([]);
   const [instLogo, setInstLogo] = useState('');
   const [instName, setInstName] = useState('');
@@ -409,6 +410,17 @@ export default function StaffPage() {
       }
     });
   };
+
+  // Look up patient name when currentTurno changes
+  useEffect(() => {
+    if (currentTurno?.rut_usuario) {
+      getDoc(doc(db, 'usuarios', currentTurno.rut_usuario)).then(snap => {
+        if (snap.exists()) {
+          setPatientName(snap.data().nombre_completo || '');
+        } else setPatientName('');
+      }).catch(() => setPatientName(''));
+    } else setPatientName('');
+  }, [currentTurno?.id, currentTurno?.rut_usuario]);
 
   // Login is now handled only from the landing page (/)
 
@@ -1198,6 +1210,7 @@ export default function StaffPage() {
                 Turno {currentTurno.letra_ticket ? `${currentTurno.letra_ticket}-` : ''}{currentTurno.numero}
               </div>
               <div className={styles.patientInfo}>
+                {patientName && <p><strong>Nombre:</strong> {patientName}</p>}
                 <p><strong>RUT:</strong> {currentTurno.rut_usuario}</p>
                 {(currentTurno.is_appointment || currentTurno.priority) ? (
                   <p className={styles.appointmentTag}>📅 Hora Agendada - Prioridad Alta</p>

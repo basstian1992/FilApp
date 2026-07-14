@@ -1,12 +1,12 @@
 'use client';
 
-import { Suspense, useEffect, useState, useRef } from 'react';
+import { Suspense, useEffect, useState, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { db } from '@/lib/firebase/client';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { useTheme } from 'next-themes';
 import styles from './tv.module.css';
-import { Volume2, VolumeX, Play, Moon, Sun, Mic } from 'lucide-react';
+import { Volume2, VolumeX, Play, Moon, Sun, Mic, Maximize2 } from 'lucide-react';
 
 interface Turno {
   id: string;
@@ -190,6 +190,20 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
   useEffect(() => {
     selectedVoiceRef.current = (selectedVoiceIndex >= 0 && selectedVoiceIndex < availableVoices.length) ? availableVoices[selectedVoiceIndex] : null;
   }, [selectedVoiceIndex, availableVoices]);
+
+  // ── Fullscreen (kiosko) ──────────────────────────────────────────────────
+  const [fsSupported, setFsSupported] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    setFsSupported(!!document.documentElement.requestFullscreen);
+    const tryFS = () => {
+      document.documentElement.requestFullscreen?.().then(() => setIsFullscreen(true)).catch(() => {});
+    };
+    tryFS();
+    const onFSChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onFSChange);
+    return () => document.removeEventListener('fullscreenchange', onFSChange);
+  }, []);
 
   // Lookup user name when currentCall changes
   useEffect(() => {
@@ -462,6 +476,16 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
           >
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
+          {fsSupported && !isFullscreen && (
+            <button
+              className={styles.themeToggle}
+              onClick={() => document.documentElement.requestFullscreen()?.then(() => setIsFullscreen(true)).catch(() => {})}
+              title="Pantalla Completa"
+              style={{ borderColor: 'var(--tv-primary, #3b82f6)', color: 'var(--tv-primary, #3b82f6)' }}
+            >
+              <Maximize2 size={18} />
+            </button>
+          )}
         </div>
       </header>
 

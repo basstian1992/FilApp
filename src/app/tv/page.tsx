@@ -25,29 +25,29 @@ interface Turno {
 
 /* ─── Premium Voice Engine ─────────────────────────────────────────────── */
 const VOICE_PRIORITY_PATTERNS = [
-  'Google Español',
-  'Google español',
-  'Google',
-  'Microsoft Sabina',
-  'Microsoft Catalina',
-  'Microsoft Carolina',
-  'Microsoft Helena',
-  'Microsoft Dalia',
-  'Microsoft Pablo',
   'Microsoft Raul',
   'Microsoft Jorge',
-  'Microsoft',
+  'Microsoft Catalina',
+  'Microsoft Pablo',
+  'Microsoft Helena',
+  'Microsoft Sabina',
+  'Microsoft Carolina',
+  'Microsoft Dalia',
   'Natural',
   'Premium',
-  'Online',
-  'Multilingual Online',
   'es-CL',
   'es-MX',
   'es-CO',
   'es-AR',
+  'Google Español',
+  'Google español',
+  'Google',
+  'Microsoft',
+  'Online',
+  'Multilingual Online',
 ];
 
-const LATAM_LANG = /es-(CL|MX|AR|CO|PE|419|US)/;
+const LATAM_LANG = /es-(CL|MX|AR|CO|PE|419)/;
 
 let _cachedVoices: SpeechSynthesisVoice[] = [];
 let _voiceLoadPromise: Promise<SpeechSynthesisVoice[]> | null = null;
@@ -126,6 +126,7 @@ function speakText(texto: string, audioEnabled: boolean, forcedVoice?: SpeechSyn
   const voices = window.speechSynthesis.getVoices();
   _cachedVoices = voices.length > 0 ? voices : _cachedVoices;
   const bestVoice = forcedVoice ?? (_cachedVoices.length > 0 ? selectBestSpanishVoice(_cachedVoices) : null);
+  if (!bestVoice) console.warn('[Voz TV] no se encontró voz española, usando fallback');
 
   const segments = texto.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [texto];
 
@@ -145,7 +146,7 @@ function speakText(texto: string, audioEnabled: boolean, forcedVoice?: SpeechSyn
       utterance.voice = bestVoice;
       utterance.lang = bestVoice.lang;
     } else {
-      utterance.lang = 'es-CL';
+      utterance.lang = 'es-MX';
     }
     utterance.rate = rate;
     utterance.volume = 1;
@@ -260,7 +261,7 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
     console.log('[TV] TV text-primary (computed):', getComputedStyle(document.documentElement).getPropertyValue('--tv-text-primary').trim());
     ensureVoicesLoaded().then((v) => {
       const sp = selectBestSpanishVoice(v);
-      const spanishVoices = v.filter(v => v.lang.startsWith('es'));
+      const spanishVoices = v.filter(v => v.lang.startsWith('es') && !v.lang.startsWith('es-US'));
       setAvailableVoices(spanishVoices);
       const idx = spanishVoices.findIndex(sv => sv.name === sp?.name);
       setSelectedVoiceIndex(idx >= 0 ? idx : 0);

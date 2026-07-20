@@ -253,8 +253,11 @@ function TotemInner() {
     try {
       const userRef = doc(db, 'usuarios', formattedRut);
       const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) {
-        await setDoc(userRef, { rut: formattedRut, institution_id: instId, created_at: new Date().toISOString() });
+      let nombrePaciente = '';
+      if (userSnap.exists()) {
+        nombrePaciente = userSnap.data().nombre_completo || '';
+      } else {
+        await setDoc(userRef, { rut: formattedRut, institution_id: instId, created_at: new Date().toISOString() }, { merge: true });
       }
 
       const instRef = doc(db, 'institutions', instId);
@@ -327,6 +330,7 @@ function TotemInner() {
           letra_ticket: letraTicket,
           departamento_solicitado: departamento,
           rut_usuario: formattedRut,
+          nombre_paciente: nombrePaciente,
           estado: 'espera',
           created_at: nowSCL.toISOString(),
           priority: isAppointment,

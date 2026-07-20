@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { db, auth } from '@/lib/firebase/client';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { collection, query, where, getDocs, updateDoc, doc, orderBy, limit, onSnapshot, getDoc, runTransaction, setDoc } from 'firebase/firestore';
 
 function validateRUT(rut: string) {
@@ -55,6 +55,7 @@ interface Funcionario {
   whatsapp_phone?: string;
   whatsapp_apikey?: string;
   email?: string;
+  panel_color?: string;
 }
 
 interface Turno {
@@ -67,6 +68,10 @@ interface Turno {
   priority_level?: number;
   is_appointment?: boolean;
   priority?: boolean;
+  nombre_paciente?: string;
+  called_at?: string;
+  created_at?: string;
+  finished_at?: string;
 }
 
 interface Notification {
@@ -86,6 +91,10 @@ export default function StaffPage() {
   const [newLetra, setNewLetra] = useState('');
   const [isEditingAvatar, setIsEditingAvatar] = useState(false);
   const [newAvatarUrl, setNewAvatarUrl] = useState('');
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [sendingPasswordReset, setSendingPasswordReset] = useState(false);
+  const [panelColor, setPanelColor] = useState('#3b82f6');
+  const [isEditingPanelColor, setIsEditingPanelColor] = useState(false);
   const [departamentosDisponibles, setDepartamentosDisponibles] = useState<string[]>(['DIDECO', 'OMIL', 'PRODESAL', 'P.M. Jefas de Hogar', 'Turismo', 'OTEC', 'Fomento', 'Otro']);
 
   const [funcionario, setFuncionario] = useState<Funcionario | null>(null);
@@ -238,6 +247,7 @@ export default function StaffPage() {
 
           setFuncionario(specData);
           funcionarioRef.current = specData;
+          setPanelColor(specData.panel_color || '#3b82f6');
           setWhatsappPhone(specData.whatsapp_phone || '');
           setWhatsappApiKey(specData.whatsapp_apikey || '');
           whatsappPhoneRef.current = specData.whatsapp_phone || '';
@@ -551,6 +561,32 @@ export default function StaffPage() {
     setLoading(false);
   };
 
+  const handlePasswordReset = async () => {
+    if (!session?.email) {
+      toast('No hay correo asociado a tu cuenta.', 'error');
+      return;
+    }
+    setSendingPasswordReset(true);
+    try {
+      await sendPasswordResetEmail(auth, session.email);
+      toast('Correo de restablecimiento enviado a ' + session.email, 'success');
+      setShowPasswordDialog(false);
+    } catch (err: any) {
+      toast('Error al enviar correo: ' + err.message, 'error');
+    }
+    setSendingPasswordReset(false);
+  };
+
+  const handleUpdatePanelColor = async (color: string) => {
+    if (!funcionario) return;
+    setPanelColor(color);
+    try {
+      await updateDoc(doc(db, 'especialistas', funcionario.id), { panel_color: color } as any);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleLinkWhatsapp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!funcionario || !whatsappPhone.trim() || !whatsappApiKey.trim()) return;
@@ -650,8 +686,11 @@ export default function StaffPage() {
       const instId = funcionario.institution_id;
       const userRef = doc(db, 'usuarios', formattedRut);
       const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) {
-        await setDoc(userRef, { rut: formattedRut, institution_id: instId, created_at: new Date().toISOString() });
+      let nombrePaciente = '';
+      if (userSnap.exists()) {
+        nombrePaciente = userSnap.data().nombre_completo || '';
+      } else {
+        await setDoc(userRef, { rut: formattedRut, institution_id: instId, created_at: new Date().toISOString() }, { merge: true });
       }
 
       const instRef = doc(db, 'institutions', instId);
@@ -699,6 +738,7 @@ export default function StaffPage() {
           letra_ticket: letraTicket,
           departamento_solicitado: funcionario.departamento,
           rut_usuario: formattedRut,
+          nombre_paciente: nombrePaciente,
           estado: 'llamado',
           created_at: nowSCL.toISOString(),
           called_at: nowSCL.toISOString(),
@@ -771,6 +811,13 @@ export default function StaffPage() {
     });
 
     const nextTurnoDoc = esperaDocs[0];
+    let nombrePaciente = nextTurnoDoc.nombre_paciente || '';
+    if (!nombrePaciente && nextTurnoDoc.rut_usuario) {
+      try {
+        const userSnap = await getDoc(doc(db, 'usuarios', nextTurnoDoc.rut_usuario));
+        if (userSnap.exists()) nombrePaciente = userSnap.data().nombre_completo || '';
+      } catch (e) { /* ignore */ }
+    }
 
     try {
       await updateDoc(doc(db, 'turnos', nextTurnoDoc.id), {
@@ -780,6 +827,7 @@ export default function StaffPage() {
           departamento: funcionario.departamento || '',
           cargo_funcionario: funcionario.cargo || '',
           letra_especialista: funcionario.letra_atencion || 'A',
+          nombre_paciente: nombrePaciente,
           called_at: new Date().toISOString()
       });
 
@@ -819,6 +867,21 @@ export default function StaffPage() {
 
       await updateDoc(doc(db, 'especialistas', funcionario.id), { estado_funcionario: 'activo' });
       setFuncionario({ ...funcionario, estado_funcionario: 'activo' });
+
+      const bitacoraRef = doc(collection(db, 'bitacora'));
+      await setDoc(bitacoraRef, {
+        turno_id: currentTurno.id,
+        rut_usuario: currentTurno.rut_usuario || '',
+        nombre_paciente: patientName || currentTurno.rut_usuario || '',
+        nombre_funcionario: funcionario.nombre || '',
+        departamento: funcionario.departamento || '',
+        letra_ticket: currentTurno.letra_ticket || '',
+        numero: currentTurno.numero || 0,
+        institution_id: funcionario.institution_id || '',
+        created_at: currentTurno.created_at || '',
+        called_at: currentTurno.called_at || '',
+        finished_at: new Date().toISOString()
+      });
 
     } catch (e) {
       console.error(e);
@@ -964,19 +1027,29 @@ export default function StaffPage() {
   }
 
   return (
-    <div className={styles.dashboardContainer}>
+    <div className={styles.dashboardContainer} style={{ '--panel-color': panelColor, '--primary': panelColor } as React.CSSProperties}>
       <header className={styles.topBar}>
         {/* ── Identity block ─────────────────────────────────────────── */}
         <div className={styles.userInfo}>
           {isEditingAvatar ? (
             <div className={styles.avatarEditRow}>
-              <input
-                className={styles.editInput}
-                value={newAvatarUrl}
-                onChange={e => setNewAvatarUrl(e.target.value)}
-                placeholder="URL de tu foto..."
-                autoFocus
-              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
+                {newAvatarUrl.trim() ? (
+                  <img src={newAvatarUrl.trim()} alt="Preview" style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border-color)' }} onError={e => (e.currentTarget.style.display = 'none')} />
+                ) : (
+                  <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--surface-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', color: 'var(--text-tertiary)' }}>
+                    {funcionario?.nombre?.substring(0, 2).toUpperCase() || '?'}
+                  </div>
+                )}
+                <input
+                  className={styles.editInput}
+                  value={newAvatarUrl}
+                  onChange={e => setNewAvatarUrl(e.target.value)}
+                  placeholder="URL de tu foto..."
+                  autoFocus
+                  style={{ width: '220px' }}
+                />
+              </div>
               <button className={styles.saveBtn} onClick={handleUpdateAvatar}>Guardar</button>
               <button className={styles.cancelBtn} onClick={() => setIsEditingAvatar(false)}>✕</button>
             </div>
@@ -1039,6 +1112,38 @@ export default function StaffPage() {
               )}
             </div>
             <span className={styles.userEmail}>{session?.email}</span>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.35rem', flexWrap: 'wrap' }}>
+              <button className={styles.saveBtn} onClick={() => setShowPasswordDialog(true)} style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem' }}>
+                Cambiar Contraseña
+              </button>
+              {isEditingPanelColor ? (
+                <span style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                  <input type="color" value={panelColor} onChange={e => handleUpdatePanelColor(e.target.value)} style={{ width: 32, height: 28, padding: 0, border: 'none', cursor: 'pointer' }} />
+                  <button className={styles.saveBtn} onClick={() => setIsEditingPanelColor(false)} style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem' }}>OK</button>
+                </span>
+              ) : (
+                <button className={styles.chipModule} onClick={() => setIsEditingPanelColor(true)} title="Color del panel" style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem' }}>
+                  <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: panelColor, marginRight: 4 }} />
+                  Color Panel
+                </button>
+              )}
+            </div>
+            {showPasswordDialog && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowPasswordDialog(false)}>
+                <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '12px', maxWidth: 420, width: '90%' }} onClick={e => e.stopPropagation()}>
+                  <h3 style={{ margin: '0 0 0.75rem' }}>Cambiar Contraseña</h3>
+                  <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
+                    Se enviará un correo de restablecimiento a <strong>{session?.email}</strong>. Haz clic en el enlace del correo para crear una nueva contraseña.
+                  </p>
+                  <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                    <button className={styles.cancelBtn} onClick={() => setShowPasswordDialog(false)} style={{ padding: '0.5rem 1rem' }}>Cancelar</button>
+                    <button className={styles.saveBtn} onClick={handlePasswordReset} disabled={sendingPasswordReset} style={{ padding: '0.5rem 1rem' }}>
+                      {sendingPasswordReset ? 'Enviando…' : 'Enviar Correo'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

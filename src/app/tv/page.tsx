@@ -20,6 +20,7 @@ interface Turno {
   called_at?: string;
   institution_id?: string;
   rut_usuario?: string;
+  nombre_paciente?: string;
 }
 
 /* ─── Premium Voice Engine ─────────────────────────────────────────────── */
@@ -496,7 +497,7 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
             {currentCall ? (
               <>
                 <div className={styles.callPatient}>
-                  {currentUserName || currentCall.rut_usuario || `Turno ${currentCall.letra_ticket ? currentCall.letra_ticket.charAt(0).toUpperCase() + '-' : ''}${currentCall.numero}`}
+                  {currentCall.nombre_paciente || currentUserName || currentCall.rut_usuario || `Turno ${currentCall.letra_ticket ? currentCall.letra_ticket.charAt(0).toUpperCase() + '-' : ''}${currentCall.numero}`}
                 </div>
                 {(currentCall.departamento || currentCall.letra_especialista) && (
                   <div className={styles.callModule}>
@@ -549,6 +550,9 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
               <div key={turno.id} className={styles.historyItem}>
                 <span className={styles.historyTurno}>
                   {turno.letra_ticket ? `${turno.letra_ticket}-` : ''}{turno.numero}
+                </span>
+                <span className={styles.historyPatient}>
+                  {turno.nombre_paciente || turno.rut_usuario || '—'}
                 </span>
                 <span className={styles.historyModulo}>
                   Mód. {turno.letra_especialista || '?'}

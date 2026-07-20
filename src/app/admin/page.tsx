@@ -18,7 +18,7 @@ import {
   Settings, BarChart3, Users, Clock, AlertTriangle,
   Download, LogOut, Building2, UserPlus, ArrowLeft, Plus,
   Link2, Eye, Shield, UserCog, ChevronRight, Monitor,
-  Tablet, LayoutDashboard, FileText, PlusCircle, Trash2, CheckCircle
+  Tablet, LayoutDashboard, FileText, PlusCircle, Trash2, CheckCircle, ClipboardList
 } from 'lucide-react';
 import UserDirectory from '@/components/UserDirectory';
 import { useToast } from '@/components/Toast';
@@ -123,6 +123,8 @@ export default function AdminPage() {
   const [adminMsg, setAdminMsg] = useState('');
   const [adminLoading, setAdminLoading] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [bitacora, setBitacora] = useState<any[]>([]);
+  const [bitacoraLoading, setBitacoraLoading] = useState(false);
 
   /* ── Auth effect ─────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -175,6 +177,11 @@ export default function AdminPage() {
     setFuncionarios(staff.filter((f: any) => f.estado_funcionario !== 'pendiente'));
     setPendingFuncionarios(staff.filter((f: any) => f.estado_funcionario === 'pendiente'));
   };
+
+  // Fetch bitácora when reportes tab is active
+  useEffect(() => {
+    if (activeTab === 'reportes') fetchBitacora();
+  }, [activeTab, institutionId]);
 
   // Live stats — scoped to current institution only
   useEffect(() => {
@@ -487,6 +494,35 @@ export default function AdminPage() {
         Estado: a.estado_funcionario || 'inactivo',
         Institucion: inst ? inst.name : 'Sin Institución',
         ID_Institucion: inst ? inst.id : ''
+      };
+    }));
+  };
+
+  const fetchBitacora = async () => {
+    if (!institutionId) return;
+    setBitacoraLoading(true);
+    try {
+      const snap = await getDocs(query(collection(db, 'bitacora'), where('institution_id', '==', institutionId), orderBy('finished_at', 'desc')));
+      setBitacora(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (e) {
+      console.error(e);
+    }
+    setBitacoraLoading(false);
+  };
+
+  const exportBitacora = async () => {
+    if (!institutionId) return;
+    const snap = await getDocs(query(collection(db, 'bitacora'), where('institution_id', '==', institutionId), orderBy('finished_at', 'desc')));
+    exportToCSV(`bitacora_${institutionName}.csv`, snap.docs.map(d => {
+      const b = d.data();
+      return {
+        ID: d.id, Turno_ID: b.turno_id || '',
+        RUT: b.rut_usuario || '', Paciente: b.nombre_paciente || '',
+        Funcionario: b.nombre_funcionario || '', Departamento: b.departamento || '',
+        Ticket: b.letra_ticket ? `${b.letra_ticket}-${b.numero}` : `${b.numero}`,
+        Creado: b.created_at ? new Date(b.created_at).toLocaleString() : '',
+        Llamado: b.called_at ? new Date(b.called_at).toLocaleString() : '',
+        Finalizado: b.finished_at ? new Date(b.finished_at).toLocaleString() : ''
       };
     }));
   };
@@ -1290,6 +1326,12 @@ export default function AdminPage() {
                     <p>Lista completa del personal con roles, módulos y estado de atención.</p>
                     <button className={styles.btnPrimary} onClick={exportFuncionarios}><Download size={16} /> Descargar Funcionarios (CSV)</button>
                   </div>
+                  <div className={styles.reportCard}>
+                    <div className={styles.reportCardIcon}><ClipboardList size={28} /></div>
+                    <h3>Bitácora de Atenciones</h3>
+                    <p>Registro detallado de cada atención finalizada con paciente, funcionario y horarios.</p>
+                    <button className={styles.btnPrimary} onClick={exportBitacora}><Download size={16} /> Descargar Bitácora (CSV)</button>
+                  </div>
                 </div>
 
                 <div className={styles.card} style={{ marginTop: '1.5rem' }}>
@@ -1302,6 +1344,36 @@ export default function AdminPage() {
                     <div className={styles.metricItem}><span className={styles.metricVal}>{funcionarios.filter(f => f.estado_funcionario === 'activo').length}</span><span className={styles.metricLabel}>Activos</span></div>
                     <div className={styles.metricItem}><span className={styles.metricVal}>{deptosList.length}</span><span className={styles.metricLabel}>Departamentos</span></div>
                   </div>
+                </div>
+
+                <div className={styles.card} style={{ marginTop: '1.5rem' }}>
+                  <div className={styles.cardHead}><ClipboardList size={18} className={styles.cardHeadIcon} /><h2>Bitácora de Atenciones</h2></div>
+                  {bitacoraLoading ? (
+                    <p style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Cargando bitácora...</p>
+                  ) : bitacora.length === 0 ? (
+                    <p style={{ padding: '1rem', color: 'var(--text-tertiary)' }}>Sin atenciones registradas.</p>
+                  ) : (
+                    <div className={styles.tableWrap}>
+                      <table className={styles.table}>
+                        <thead>
+                          <tr><th>Paciente</th><th>RUT</th><th>Funcionario</th><th>Depto</th><th>Ticket</th><th>Inicio</th><th>Término</th></tr>
+                        </thead>
+                        <tbody>
+                          {bitacora.slice(0, 100).map(b => (
+                            <tr key={b.id}>
+                              <td>{b.nombre_paciente || '—'}</td>
+                              <td>{b.rut_usuario || '—'}</td>
+                              <td>{b.nombre_funcionario || '—'}</td>
+                              <td>{b.departamento || '—'}</td>
+                              <td>{b.letra_ticket ? `${b.letra_ticket}-${b.numero}` : b.numero}</td>
+                              <td>{b.called_at ? new Date(b.called_at).toLocaleString() : '—'}</td>
+                              <td>{b.finished_at ? new Date(b.finished_at).toLocaleString() : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

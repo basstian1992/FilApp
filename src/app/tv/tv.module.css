@@ -185,7 +185,7 @@
 .mainContent {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 400px;
+  grid-template-columns: 1fr 500px;
   gap: 2rem;
   padding: 2rem 3rem;
   min-height: 0;
@@ -383,7 +383,7 @@
 
 .historyTitle {
   padding: 1.75rem 2rem;
-  font-size: 1.1rem;
+  font-size: 1.5rem;
   font-weight: 800;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -397,21 +397,22 @@
 .historyList {
   flex: 1;
   overflow-y: hidden;
-  padding: 1.5rem;
+  padding: 2rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .historyItem {
   background: var(--tv-glass-bg);
   border: 1px solid var(--tv-border);
-  border-left: 4px solid var(--tv-primary, #5B21B6);
-  border-radius: 16px;
-  padding: 1.25rem 1.5rem;
+  border-left: 6px solid var(--tv-primary, #5B21B6);
+  border-radius: 20px;
+  padding: 2rem 2.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1.5rem;
   transition: all 0.3s ease;
   animation: historyAppear 0.5s ease-out backwards;
 }
@@ -422,27 +423,40 @@
 }
 
 .historyTurno {
-  font-size: 1.8rem;
+  font-size: 3.5rem;
   font-weight: 800;
   color: var(--tv-text-primary);
   letter-spacing: -0.02em;
+  flex-shrink: 0;
+}
+
+.historyPatient {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--tv-text-secondary);
+  flex: 1;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .historyModulo {
-  font-size: 1.25rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--tv-primary, #60a5fa);
   background: color-mix(in srgb, var(--tv-primary, #5B21B6) 10%, transparent);
-  padding: 0.4rem 1rem;
-  border-radius: 10px;
+  padding: 0.6rem 1.5rem;
+  border-radius: 14px;
+  flex-shrink: 0;
 }
 
 .historyEmpty {
   text-align: center;
   color: var(--tv-text-dim);
-  font-size: 1.2rem;
+  font-size: 1.5rem;
   font-weight: 300;
-  padding: 3rem 1rem;
+  padding: 4rem 1rem;
 }
 
 /* ===== FOOTER TICKER ===== */
@@ -500,7 +514,7 @@
   }
   .historySection {
     flex-direction: row;
-    height: 120px;
+    height: 160px;
     border-radius: 20px;
   }
   .historyTitle {
@@ -514,12 +528,22 @@
     padding: 1rem;
   }
   .historyItem {
-    min-width: 200px;
+    min-width: 300px;
     flex-direction: column;
     justify-content: center;
     gap: 0.5rem;
     border-left: none;
     border-top: 4px solid #5B21B6;
+    padding: 1.5rem;
+  }
+  .historyTurno {
+    font-size: 2.5rem;
+  }
+  .historyPatient {
+    font-size: 1.25rem;
+  }
+  .historyModulo {
+    font-size: 1.25rem;
   }
 }
 
@@ -584,14 +608,22 @@
     border-radius: 60px;
   }
   .historyTitle {
-    font-size: 1.5rem;
+    font-size: 2rem;
     padding: 2.5rem 3rem;
   }
   .historyTurno {
+    font-size: 4.5rem;
+  }
+  .historyPatient {
     font-size: 2.5rem;
   }
   .historyModulo {
-    font-size: 1.75rem;
+    font-size: 2.25rem;
+  }
+  .historyItem {
+    padding: 2.5rem 3rem;
+    border-radius: 28px;
+    border-left-width: 8px;
   }
   .footerTicker {
     height: 80px;
@@ -638,8 +670,22 @@
   .callStaff {
     font-size: 3.5rem;
   }
-  .historiaSection {
+  .historySection {
     border-radius: 80px;
+  }
+  .historyTurno {
+    font-size: 6rem;
+  }
+  .historyPatient {
+    font-size: 3.5rem;
+  }
+  .historyModulo {
+    font-size: 3rem;
+  }
+  .historyItem {
+    padding: 3.5rem 4rem;
+    border-radius: 36px;
+    border-left-width: 10px;
   }
   .footerTicker {
     height: 100px;

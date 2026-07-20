@@ -18,6 +18,8 @@ export interface UserData {
   direccion: string;
   telefono: string;
   discapacidad: string;
+  fecha_nacimiento: string;
+  antecedentes_penales: string;
   
   ocupacion: string;
   enfermedad_base: string;
@@ -65,6 +67,8 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
     direccion: '',
     telefono: '',
     discapacidad: 'No',
+    fecha_nacimiento: '',
+    antecedentes_penales: 'No',
     ocupacion: '',
     enfermedad_base: '',
     funcionarios_atienden: '',
@@ -96,8 +100,7 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
           
           setData(prev => ({ ...prev, ...ud, rut }));
           
-          // Check if mandatory fields are complete initially
-          if (ud.nombre_completo && ud.region && ud.comuna && ud.direccion && ud.telefono && ud.id_ficha && ud.nacionalidad) {
+          if (ud.nombre_completo && ud.region && ud.comuna && ud.direccion && ud.telefono && ud.id_ficha && ud.nacionalidad && ud.fecha_nacimiento) {
             onSaved(true);
           } else {
             onSaved(false);
@@ -139,7 +142,9 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
       data.comuna !== '' &&
       data.direccion.trim() !== '' &&
       data.telefono.trim() !== '' &&
-      data.discapacidad !== ''
+      data.discapacidad !== '' &&
+      data.fecha_nacimiento.trim() !== '' &&
+      data.antecedentes_penales !== ''
     );
   };
 
@@ -232,11 +237,18 @@ export default function UserForm({ rut, institutionId, funcionarioId, funcionari
           <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Discapacidad *</label>
           <select name="discapacidad" value={data.discapacidad} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }}>
             <option value="No">No</option>
-            <option value="Física">Física</option>
-            <option value="Sensorial (Visual/Auditiva)">Sensorial (Visual/Auditiva)</option>
-            <option value="Intelectual/Cognitiva">Intelectual/Cognitiva</option>
-            <option value="Psíquica">Psíquica</option>
-            <option value="Otra">Otra</option>
+            <option value="Sí">Sí</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Fecha de Nacimiento *</label>
+          <input name="fecha_nacimiento" type="date" value={data.fecha_nacimiento} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
+        </div>
+        <div>
+          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Antecedentes Penales *</label>
+          <select name="antecedentes_penales" value={data.antecedentes_penales} onChange={handleChange} required style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }}>
+            <option value="No">No</option>
+            <option value="Sí">Sí</option>
           </select>
         </div>
       </div>

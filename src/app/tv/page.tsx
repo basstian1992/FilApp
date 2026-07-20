@@ -531,8 +531,8 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
                   const ingTicketLetter = ing.letra_ticket ? ing.letra_ticket.charAt(0).toUpperCase() : '';
                   return (
                     <div key={ing.id} className={styles.ingresoItem}>
-                      {ingTicketLetter ? `${ingTicketLetter}-` : ''}{ing.numero}
-                      {ing.rut_usuario && <span className={styles.ingresoRut}>{ing.rut_usuario}</span>}
+                      <span>{ingTicketLetter ? `${ingTicketLetter}-` : ''}{ing.numero}</span>
+                      <span className={styles.ingresoRut}>{ing.nombre_paciente || ing.rut_usuario || ''}</span>
                     </div>
                   );
                 })

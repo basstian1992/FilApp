@@ -502,10 +502,16 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
                 {(currentCall.departamento || currentCall.letra_especialista) && (
                   <div className={styles.callModule}>
                     Diríjase{' '}
-                    {currentCall.departamento ? (
-                      <>al Módulo <span className={styles.callModuleHighlight}>{currentCall.departamento}</span></>
-                    ) : (
+                    {currentCall.letra_especialista ? (
                       <>al Módulo <span className={styles.callModuleHighlight}>{currentCall.letra_especialista}</span></>
+                    ) : (
+                      <>al Módulo <span className={styles.callModuleHighlight}>{currentCall.departamento}</span></>
+                    )}
+                    {currentCall.departamento && currentCall.letra_especialista && (
+                      <> — <span className={styles.callDeptName}>{currentCall.departamento}</span></>
+                    )}
+                    {currentCall.departamento && !currentCall.letra_especialista && (
+                      <></>
                     )}
                   </div>
                 )}

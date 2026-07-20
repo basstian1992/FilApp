@@ -554,9 +554,6 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
                 <span className={styles.historyPatient}>
                   {turno.nombre_paciente || turno.rut_usuario || '—'}
                 </span>
-                <span className={styles.historyModulo}>
-                  Mód. {turno.letra_especialista || '?'}
-                </span>
               </div>
             ))}
             {turnos.length <= 1 && (

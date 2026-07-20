@@ -245,11 +245,21 @@
   width: fit-content;
 }
 
-.instLogoSmall {
-  height: 36px;
+.headerLogoCenter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
+  padding: 0 1rem;
+}
+
+.headerLogoImg {
+  height: 100px;
   width: auto;
-  border-radius: 6px;
+  max-width: 260px;
   object-fit: contain;
+  border-radius: 8px;
 }
 
 .instNameSmall {
@@ -722,7 +732,8 @@
 }
 
 @media (max-width: 640px) {
-  .topBar { padding: var(--spacing-3) var(--spacing-4); gap: var(--spacing-2); }
+  .topBar { padding: var(--spacing-2) var(--spacing-3); gap: var(--spacing-2); }
+  .headerLogoImg { height: 72px; max-width: 180px; }
   .userInfo strong { font-size: 1rem; }
   .bigNumber { font-size: 5rem; }
   .actionBtn { font-size: 1rem; min-height: 52px; }

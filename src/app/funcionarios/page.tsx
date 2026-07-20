@@ -1082,7 +1082,6 @@ export default function StaffPage() {
             <span className={styles.greeting}>Buen día,</span>
             <strong className={styles.userName}>{funcionario?.nombre || 'Funcionario'}</strong>
             <div className={styles.instBadge}>
-              {instLogo && <img src={instLogo} alt="Logo" className={styles.instLogoSmall} />}
               <span className={styles.instNameSmall}>{instName}</span>
             </div>
             <div className={styles.metaChips}>
@@ -1146,6 +1145,13 @@ export default function StaffPage() {
             )}
           </div>
         </div>
+
+        {/* ── Center Logo ──────────────────────────────────────────── */}
+        {instLogo && (
+          <div className={styles.headerLogoCenter}>
+            <img src={instLogo} alt="Logo Institución" className={styles.headerLogoImg} />
+          </div>
+        )}
 
         {/* ── Actions block ──────────────────────────────────────────── */}
         <div className={styles.headerActions}>

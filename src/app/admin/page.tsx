@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { db, auth } from '@/lib/firebase/client';
 import {
@@ -69,6 +69,52 @@ async function createUserSecondary(email: string, password: string) {
 type AdminTab = 'dashboard' | 'config' | 'funcionarios' | 'directorio' | 'reportes';
 type GerenteTab = 'instituciones' | 'administradores' | 'reportes';
 
+/* ─── Module Inline Editor ──────────────────────────────────────────────────── */
+function ModuleEditor({ funcionario, onSaved }: { funcionario: any; onSaved: (newLetra: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(funcionario.letra_atencion || '');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!val.trim() || val.trim() === (funcionario.letra_atencion || '')) { setEditing(false); return; }
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, 'especialistas', funcionario.id), { letra_atencion: val.trim() });
+      onSaved(val.trim());
+      setEditing(false);
+    } catch (e) { console.error(e); }
+    setSaving(false);
+  };
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => { setVal(funcionario.letra_atencion || ''); setEditing(true); }}
+        style={{ background: 'var(--surface-secondary)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.3rem 0.7rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', transition: 'all 0.15s' }}
+        title="Click para editar módulo"
+      >
+        {funcionario.letra_atencion || '—'}
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+      <input
+        autoFocus
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+        onBlur={save}
+        style={{ width: '70px', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '2px solid var(--primary)', fontSize: '0.85rem', fontWeight: 700, outline: 'none' }}
+        maxLength={10}
+        placeholder="Mód."
+      />
+      {saving && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>…</span>}
+    </div>
+  );
+}
+
 /* ─── Component ──────────────────────────────────────────────────────────────── */
 export default function AdminPage() {
   const router = useRouter();
@@ -132,6 +178,7 @@ export default function AdminPage() {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
   const [bulkFileName, setBulkFileName] = useState('');
+  const unsubFuncionariosRef = useRef<(() => void) | null>(null);
 
   /* ── Auth effect ─────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -178,11 +225,18 @@ export default function AdminPage() {
   };
 
   const loadFuncionarios = async (instId: string) => {
-    const snap = await getDocs(query(collection(db, 'especialistas'), where('institution_id', '==', instId)));
-    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const staff = all.filter((f: any) => f.role === 'funcionario');
-    setFuncionarios(staff.filter((f: any) => f.estado_funcionario !== 'pendiente'));
-    setPendingFuncionarios(staff.filter((f: any) => f.estado_funcionario === 'pendiente'));
+    unsubFuncionariosRef.current?.();
+    const unsub = onSnapshot(
+      query(collection(db, 'especialistas'), where('institution_id', '==', instId)),
+      (snap) => {
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const staff = all.filter((f: any) => f.role === 'funcionario');
+        setFuncionarios(staff.filter((f: any) => f.estado_funcionario !== 'pendiente'));
+        setPendingFuncionarios(staff.filter((f: any) => f.estado_funcionario === 'pendiente'));
+      }
+    );
+    unsubFuncionariosRef.current = unsub;
+    return unsub;
   };
 
   // Fetch bitácora when reportes tab is active
@@ -218,7 +272,11 @@ export default function AdminPage() {
   };
 
   /* ── Actions ─────────────────────────────────────────────────────────────── */
-  const handleLogout = async () => { await signOut(auth); router.push('/'); };
+  const handleLogout = async () => {
+    unsubFuncionariosRef.current?.();
+    unsubFuncionariosRef.current = null;
+    await signOut(auth); router.push('/');
+  };
 
   const handleCreateInstitution = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1412,7 +1470,14 @@ export default function AdminPage() {
                                 </td>
                                 <td><input className={styles.tableInput} value={f.nombre || ''} onChange={e => updateFuncionario(f.id, 'nombre', e.target.value)} /></td>
                                 <td><input className={styles.tableInput} value={f.cargo || ''} onChange={e => updateFuncionario(f.id, 'cargo', e.target.value)} /></td>
-                                <td><input className={styles.tableInput} value={f.letra_atencion || ''} onChange={e => updateFuncionario(f.id, 'letra_atencion', e.target.value)} /></td>
+                                <td>
+                                  <ModuleEditor
+                                    funcionario={f}
+                                    onSaved={(newLetra) => {
+                                      setFuncionarios(prev => prev.map(x => x.id === f.id ? { ...x, letra_atencion: newLetra } : x));
+                                    }}
+                                  />
+                                </td>
                                 <td><span className={styles.chip} data-role={f.estado_funcionario === 'activo' ? 'admin' : 'funcionario'}>{f.estado_funcionario || 'inactivo'}</span></td>
                                 <td>
                                   <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>

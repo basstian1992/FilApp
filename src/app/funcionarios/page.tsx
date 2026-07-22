@@ -1089,11 +1089,13 @@ export default function StaffPage() {
               {funcionario?.departamento && <span className={styles.chip} data-variant="dept">{funcionario.departamento}</span>}
               {isEditingLetra ? (
                 <span className={styles.moduleEditRow}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Módulo:</span>
                   <input
                     className={styles.editInputSm}
                     value={newLetra}
                     onChange={e => setNewLetra(e.target.value)}
-                    placeholder="Módulo"
+                    onKeyDown={e => { if (e.key === 'Enter') handleUpdateLetra(); if (e.key === 'Escape') setIsEditingLetra(false); }}
+                    placeholder="Letra o nombre"
                     autoFocus
                   />
                   <button className={styles.saveBtn} onClick={handleUpdateLetra}>OK</button>
@@ -1103,7 +1105,7 @@ export default function StaffPage() {
                 <button
                   className={styles.chipModule}
                   onClick={() => { setNewLetra(funcionario?.letra_atencion || ''); setIsEditingLetra(true); }}
-                  title="Editar módulo"
+                  title="Click para editar módulo u oficina donde atiendes"
                 >
                   Módulo {funcionario?.letra_atencion || '—'}
                   <span className={styles.chipEditIcon}>✎</span>

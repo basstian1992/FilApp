@@ -18,7 +18,7 @@ import {
   Settings, BarChart3, Users, Clock, AlertTriangle,
   Download, LogOut, Building2, UserPlus, ArrowLeft, Plus,
   Link2, Eye, Shield, UserCog, ChevronRight, Monitor,
-  Tablet, LayoutDashboard, FileText, PlusCircle, Trash2, CheckCircle, ClipboardList
+  Tablet, LayoutDashboard, FileText, PlusCircle, Trash2, CheckCircle, ClipboardList, Upload
 } from 'lucide-react';
 import UserDirectory from '@/components/UserDirectory';
 import { useToast } from '@/components/Toast';
@@ -125,6 +125,13 @@ export default function AdminPage() {
   const [resetting, setResetting] = useState(false);
   const [bitacora, setBitacora] = useState<any[]>([]);
   const [bitacoraLoading, setBitacoraLoading] = useState(false);
+
+  // Bulk upload state
+  const [bulkRows, setBulkRows] = useState<any[]>([]);
+  const [bulkResults, setBulkResults] = useState<{ ok: string[]; fail: { email: string; error: string }[] }>({ ok: [], fail: [] });
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
+  const [bulkFileName, setBulkFileName] = useState('');
 
   /* ── Auth effect ─────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -439,6 +446,80 @@ export default function AdminPage() {
       }
     }
     setAdminLoading(false);
+  };
+
+  const BULK_PASS = '123456';
+
+  const handleBulkExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBulkFileName(file.name);
+    setBulkResults({ ok: [], fail: [] });
+    setBulkProgress({ current: 0, total: 0 });
+    try {
+      const XLSX = await import('xlsx');
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data);
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws);
+      setBulkRows(rows);
+    } catch (err: any) {
+      setBulkRows([]);
+      setBulkResults({ ok: [], fail: [{ email: '', error: `Error al leer Excel: ${err.message}` }] });
+    }
+    e.target.value = '';
+  };
+
+  const handleBulkCreate = async () => {
+    if (!bulkRows.length || !institutionId) return;
+    setBulkLoading(true);
+    setBulkResults({ ok: [], fail: [] });
+    const ok: string[] = [];
+    const fail: { email: string; error: string }[] = [];
+
+    for (let i = 0; i < bulkRows.length; i++) {
+      const row = bulkRows[i];
+      const email = (row['EMAIL INSTITUCIONAL'] || '').toString().trim().toLowerCase();
+      if (!email || !email.includes('@')) {
+        fail.push({ email: email || `Fila ${i + 2}`, error: 'Sin correo institucional válido' });
+        setBulkProgress({ current: i + 1, total: bulkRows.length });
+        continue;
+      }
+      const nombre = [row['NOMBRES'], row['APELLIDO_1'], row['APELLIDO_2']].filter(Boolean).map((s: any) => String(s).trim()).join(' ');
+      const depto = (row['PROGRAMA O DEPARTAMENTO'] || '').toString().trim();
+      const cargo = (row['CARGO '] || row['CARGO'] || '').toString().trim();
+      const rut = row['RUT'] ? `${row['RUT']}-${row['DV'] || ''}` : '';
+      const comuna = (row['COMUNA'] || '').toString().trim();
+
+      try {
+        const newUid = await createUserSecondary(email, BULK_PASS);
+        await setDoc(doc(db, 'especialistas', newUid), {
+          user_id: newUid,
+          institution_id: institutionId,
+          role: 'funcionario',
+          nombre: nombre || 'Funcionario',
+          departamento: depto || 'Sin departamento',
+          cargo: cargo || 'Funcionario',
+          estado_funcionario: 'activo',
+          avatar_url: '',
+          letra_atencion: depto ? depto.substring(0, 2).toUpperCase() : email.split('@')[0].substring(0, 2).toUpperCase(),
+          whatsapp_phone: '',
+          whatsapp_apikey: '',
+          email,
+          rut,
+          comuna,
+        });
+        await setDoc(doc(db, 'usuarios', newUid), { merge: true } as any);
+        ok.push(email);
+      } catch (err: any) {
+        fail.push({ email, error: err.code === 'auth/email-already-in-use' ? 'Ya registrado' : err.message });
+      }
+      setBulkProgress({ current: i + 1, total: bulkRows.length });
+    }
+
+    setBulkResults({ ok, fail });
+    setBulkLoading(false);
+    if (ok.length > 0) await loadDashboard(userProfile.user_id, userProfile.role);
   };
 
   const updateFuncionario = async (id: string, field: string, value: string) => {
@@ -1226,6 +1307,82 @@ export default function AdminPage() {
                       {funcLoading ? 'Registrando…' : <><UserPlus size={15} /> Registrar Funcionario</>}
                     </button>
                   </form>
+                </div>
+
+                {/* ── Carga Masiva desde Excel ──────────────────── */}
+                <div className={styles.card} style={{ marginTop: '1.25rem' }}>
+                  <div className={styles.cardHead}>
+                    <Upload size={18} className={styles.cardHeadIcon} />
+                    <h2>Carga Masiva de Funcionarios</h2>
+                  </div>
+                  <p className={styles.cardDesc}>
+                    Sube un Excel con columna <strong>EMAIL INSTITUCIONAL</strong>. Se crearán Auth + perfil con contraseña <code style={{ background: 'var(--surface-secondary)', padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.85rem' }}>{BULK_PASS}</code>.
+                  </p>
+                  <label className={styles.btnPrimary} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Upload size={15} /> Seleccionar Excel
+                    <input type="file" accept=".xlsx,.xls,.csv" onChange={handleBulkExcel} style={{ display: 'none' }} />
+                  </label>
+                  {bulkFileName && <span style={{ marginLeft: '0.75rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{bulkFileName} — {bulkRows.length} fila{bulkRows.length !== 1 ? 's' : ''}</span>}
+
+                  {bulkRows.length > 0 && !bulkLoading && bulkResults.ok.length === 0 && (
+                    <div style={{ marginTop: '1rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Vista previa ({bulkRows.length} usuarios)</span>
+                        <button className={styles.btnPrimary} onClick={handleBulkCreate} disabled={!institutionId}>
+                          <Upload size={15} /> Crear {bulkRows.length} Funcionarios
+                        </button>
+                      </div>
+                      <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                        <table className={styles.table}>
+                          <thead><tr><th>Email</th><th>Nombre</th><th>Depto</th><th>Cargo</th></tr></thead>
+                          <tbody>
+                            {bulkRows.map((row: any, i: number) => {
+                              const em = (row['EMAIL INSTITUCIONAL'] || '').toString().trim();
+                              const nm = [row['NOMBRES'], row['APELLIDO_1'], row['APELLIDO_2']].filter(Boolean).map((s: any) => String(s).trim()).join(' ');
+                              return (
+                                <tr key={i}>
+                                  <td style={{ fontSize: '0.82rem', fontWeight: 600, color: em && em.includes('@') ? 'var(--text-primary)' : 'var(--destructive)' }}>{em || `Fila ${i + 2}: sin email`}</td>
+                                  <td style={{ fontSize: '0.82rem' }}>{nm || '—'}</td>
+                                  <td style={{ fontSize: '0.82rem' }}>{(row['PROGRAMA O DEPARTAMENTO'] || '').toString().trim()}</td>
+                                  <td style={{ fontSize: '0.82rem' }}>{(row['CARGO '] || row['CARGO'] || '').toString().trim()}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {bulkLoading && (
+                    <div style={{ marginTop: '1rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.4rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                        <span>Creando usuarios…</span>
+                        <span>{bulkProgress.current} / {bulkProgress.total}</span>
+                      </div>
+                      <div style={{ width: '100%', height: '8px', background: 'var(--surface-secondary)', borderRadius: '999px', overflow: 'hidden' }}>
+                        <div style={{ width: `${bulkProgress.total ? (bulkProgress.current / bulkProgress.total) * 100 : 0}%`, height: '100%', background: 'var(--primary)', borderRadius: '999px', transition: 'width 0.3s ease' }} />
+                      </div>
+                    </div>
+                  )}
+
+                  {(bulkResults.ok.length > 0 || bulkResults.fail.length > 0) && (
+                    <div style={{ marginTop: '1rem' }}>
+                      {bulkResults.ok.length > 0 && (
+                        <div style={{ padding: '0.75rem 1rem', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '8px', marginBottom: '0.5rem', fontSize: '0.85rem' }}>
+                          <strong style={{ color: 'var(--success)' }}>✅ {bulkResults.ok.length} creados:</strong> {bulkResults.ok.join(', ')}
+                        </div>
+                      )}
+                      {bulkResults.fail.length > 0 && (
+                        <div style={{ padding: '0.75rem 1rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', fontSize: '0.85rem' }}>
+                          <strong style={{ color: 'var(--destructive)' }}>❌ {bulkResults.fail.length} fallidos:</strong>
+                          <ul style={{ margin: '0.25rem 0 0 1.25rem', padding: 0 }}>
+                            {bulkResults.fail.map((f, i) => <li key={i}><strong>{f.email}</strong>: {f.error}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Funcionarios by dept */}

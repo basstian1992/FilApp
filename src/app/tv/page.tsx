@@ -468,6 +468,11 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
                   ))}
                 </select>
                 <span style={{ fontSize: '0.8rem', color: 'var(--tv-text-muted)' }}>Selecciona la voz para la TV (latinas primero)</span>
+                {!availableVoices.some(isLatamVoice) && (
+                  <span style={{ fontSize: '0.8rem', color: '#f59e0b', maxWidth: '340px', textAlign: 'center' }}>
+                    ⚠️ Tu navegador no tiene voces latinas. Abre esta página en <strong>Microsoft Edge</strong> para escuchar voces de Chile/México (Raul, Jorge, Catalina…).
+                  </span>
+                )}
               </div>
             )}
             <div style={{ fontSize: '1rem', color: 'var(--tv-text-muted)', marginTop: '0.5rem', fontFamily: 'monospace' }}>
@@ -525,7 +530,7 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
                 value={selectedVoiceIndex}
                 onChange={e => setSelectedVoiceIndex(parseInt(e.target.value))}
                 className={styles.voiceSelect}
-                title="Cambiar voz"
+                title={availableVoices.some(isLatamVoice) ? 'Cambiar voz' : 'Sin voces latinas en este navegador. Abre en Microsoft Edge para voces de Chile/México.'}
               >
                 <option value={-1}>Auto · Recomendada</option>
                 {availableVoices.map((v, i) => (

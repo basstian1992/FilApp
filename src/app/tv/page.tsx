@@ -2,11 +2,11 @@
 
 import { Suspense, useEffect, useState, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { db } from '@/lib/firebase/client';
+import { db, auth } from '@/lib/firebase/client';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { useTheme } from 'next-themes';
 import styles from './tv.module.css';
-import { Volume2, VolumeX, Play, Moon, Sun, Mic, Maximize2 } from 'lucide-react';
+import { Volume2, VolumeX, Play, Moon, Sun, Mic, Maximize2, RotateCcw, CheckCircle2 } from 'lucide-react';
 
 interface Turno {
   id: string;
@@ -183,6 +183,8 @@ function TVInner() {
   const [selectedVoiceIndex, setSelectedVoiceIndex] = useState(-1);
   const [showVoicePicker, setShowVoicePicker] = useState(false);
   const [currentUserName, setCurrentUserName] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const [resetBanner, setResetBanner] = useState('');
 const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
 
   const audioEnabledRef = useRef(isAudioEnabled);
@@ -359,6 +361,41 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
     window.speechSynthesis.speak(unlock);
   };
 
+  const handleResetTV = async () => {
+    if (!institutionId) {
+      alert('No hay institución seleccionada para reiniciar.');
+      return;
+    }
+    if (!window.confirm('¿Reiniciar el conteo a cero y limpiar los datos de la pantalla? Esta acción no se puede deshacer.')) return;
+
+    setResetting(true);
+    const actor = auth.currentUser?.displayName || auth.currentUser?.email || 'Pantalla TV';
+    try {
+      const res = await fetch('/api/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ institutionId, nombre: actor }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTurnos([]);
+        setNuevosIngresos([]);
+        setCurrentCall(null);
+        setCurrentUserName('');
+        setResetBanner('Conteo reiniciado a 0');
+        window.speechSynthesis?.cancel();
+        setTimeout(() => setResetBanner(''), 5000);
+      } else {
+        alert('Error al reiniciar el conteo: ' + (data.error || 'Desconocido'));
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error al conectar con el servidor para reiniciar el conteo.');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   if (showInitOverlay) {
     return (
       <main className={styles.overlay}>
@@ -478,6 +515,15 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
           >
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
+          <button
+            className={styles.resetBtn}
+            onClick={handleResetTV}
+            disabled={resetting}
+            title="Reiniciar conteo a cero y limpiar pantalla"
+          >
+            <RotateCcw size={16} />
+            {resetting ? 'Reiniciando...' : 'Reiniciar'}
+          </button>
           {fsSupported && !isFullscreen && (
             <button
               className={styles.themeToggle}
@@ -490,6 +536,13 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
           )}
         </div>
       </header>
+
+      {resetBanner && (
+        <div className={styles.resetBanner}>
+          <CheckCircle2 size={18} />
+          {resetBanner}
+        </div>
+      )}
 
       <div className={styles.mainContent}>
         <section className={styles.callSection}>

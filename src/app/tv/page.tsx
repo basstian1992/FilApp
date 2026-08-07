@@ -28,26 +28,69 @@ const VOICE_PRIORITY_PATTERNS = [
   'Microsoft Raul',
   'Microsoft Jorge',
   'Microsoft Catalina',
+  'Microsoft Lorenzo',
+  'Microsoft Dalia',
   'Microsoft Pablo',
+  'Microsoft Tomas',
+  'Microsoft Elena',
+  'Microsoft Gonzalo',
+  'Microsoft Salome',
+  'Microsoft Francisco',
+  'Microsoft Beatriz',
+  'Microsoft Carlota',
+  'Microsoft Cecilia',
+  'Microsoft Larissa',
+  'Microsoft Liberto',
   'Microsoft Helena',
   'Microsoft Sabina',
-  'Microsoft Carolina',
-  'Microsoft Dalia',
   'Natural',
   'Premium',
-  'es-CL',
-  'es-MX',
-  'es-CO',
-  'es-AR',
-  'Google Español',
   'Google español',
+  'Google Español',
+  'español',
+  'espanol',
   'Google',
   'Microsoft',
   'Online',
   'Multilingual Online',
 ];
 
-const LATAM_LANG = /es-(CL|MX|AR|CO|PE|419)/;
+const LATAM_LANG = /es-(CL|MX|AR|CO|PE|VE|EC|BO|PY|UY|GT|HN|SV|NI|CR|PA|DO|PR|CU|419)/;
+
+const LANG_LABEL: Record<string, string> = {
+  'es-CL': 'Chile', 'es-MX': 'México', 'es-AR': 'Argentina', 'es-CO': 'Colombia',
+  'es-PE': 'Perú', 'es-VE': 'Venezuela', 'es-EC': 'Ecuador', 'es-BO': 'Bolivia',
+  'es-PY': 'Paraguay', 'es-UY': 'Uruguay', 'es-GT': 'Guatemala', 'es-HN': 'Honduras',
+  'es-SV': 'El Salvador', 'es-NI': 'Nicaragua', 'es-CR': 'Costa Rica', 'es-PA': 'Panamá',
+  'es-DO': 'Rep. Dominicana', 'es-PR': 'Puerto Rico', 'es-CU': 'Cuba', 'es-419': 'Latinoamérica',
+  'es-ES': 'España',
+};
+
+function isLatamVoice(v: SpeechSynthesisVoice): boolean {
+  return LATAM_LANG.test(v.lang);
+}
+
+function voiceScore(v: SpeechSynthesisVoice): number {
+  for (let i = 0; i < VOICE_PRIORITY_PATTERNS.length; i++) {
+    if (v.name.includes(VOICE_PRIORITY_PATTERNS[i])) return VOICE_PRIORITY_PATTERNS.length - i;
+  }
+  return 0;
+}
+
+function voiceLabel(v: SpeechSynthesisVoice): string {
+  const country = LANG_LABEL[v.lang] || v.lang;
+  const name = v.name.replace(/^Microsoft /, '').replace(/^Google /, '');
+  return `${name} · ${country}`;
+}
+
+function sortSpanishVoices(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice[] {
+  return [...voices].sort((a, b) => {
+    const aLatam = isLatamVoice(a) ? 1 : 0;
+    const bLatam = isLatamVoice(b) ? 1 : 0;
+    if (aLatam !== bLatam) return bLatam - aLatam;
+    return voiceScore(b) - voiceScore(a);
+  });
+}
 
 let _cachedVoices: SpeechSynthesisVoice[] = [];
 let _voiceLoadPromise: Promise<SpeechSynthesisVoice[]> | null = null;
@@ -81,7 +124,7 @@ function ensureVoicesLoaded(): Promise<SpeechSynthesisVoice[]> {
 }
 
 function selectBestSpanishVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
-  const spanish = voices.filter(v => v.lang.startsWith('es'));
+  const spanish = voices.filter(v => v.lang.startsWith('es') && !v.lang.startsWith('es-US'));
   if (spanish.length === 0) return null;
 
   const latam = spanish.filter(v => LATAM_LANG.test(v.lang));
@@ -263,11 +306,10 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
     console.log('[TV] TV text-primary (computed):', getComputedStyle(document.documentElement).getPropertyValue('--tv-text-primary').trim());
     ensureVoicesLoaded().then((v) => {
       const sp = selectBestSpanishVoice(v);
-      const spanishVoices = v.filter(v => v.lang.startsWith('es') && !v.lang.startsWith('es-US'));
+      const spanishVoices = sortSpanishVoices(v.filter(v => v.lang.startsWith('es') && !v.lang.startsWith('es-US')));
       setAvailableVoices(spanishVoices);
-      const idx = spanishVoices.findIndex(sv => sv.name === sp?.name);
-      setSelectedVoiceIndex(idx >= 0 ? idx : 0);
-      console.log('[Voz TV] voces cargadas:', v.length, '| mejor voz:', sp?.name || 'ninguna');
+      setSelectedVoiceIndex(-1);
+      console.log('[Voz TV] voces cargadas:', v.length, '| español:', spanishVoices.length, '| mejor voz:', sp?.name || 'ninguna');
     });
   }, []);
 
@@ -420,11 +462,12 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
                   onChange={e => setSelectedVoiceIndex(parseInt(e.target.value))}
                   style={{ padding: '0.5rem 1rem', borderRadius: '10px', border: '1px solid var(--tv-border-strong)', background: 'var(--tv-bg-medium)', color: 'var(--tv-text-primary)', fontSize: '0.85rem', maxWidth: '350px', cursor: 'pointer' }}
                 >
+                  <option value={-1}>Auto · Recomendada</option>
                   {availableVoices.map((v, i) => (
-                    <option key={i} value={i}>{v.name} ({v.lang})</option>
+                    <option key={i} value={i}>{voiceLabel(v)}</option>
                   ))}
                 </select>
-                <span style={{ fontSize: '0.8rem', color: 'var(--tv-text-muted)' }}>Selecciona la voz para la TV</span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--tv-text-muted)' }}>Selecciona la voz para la TV (latinas primero)</span>
               </div>
             )}
             <div style={{ fontSize: '1rem', color: 'var(--tv-text-muted)', marginTop: '0.5rem', fontFamily: 'monospace' }}>
@@ -484,8 +527,9 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
                 className={styles.voiceSelect}
                 title="Cambiar voz"
               >
+                <option value={-1}>Auto · Recomendada</option>
                 {availableVoices.map((v, i) => (
-                  <option key={i} value={i}>{v.name.replace(/^Microsoft /, '').replace(/^Google /, '')} ({v.lang})</option>
+                  <option key={i} value={i}>{voiceLabel(v)}</option>
                 ))}
               </select>
               <button

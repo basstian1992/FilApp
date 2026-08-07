@@ -1,12 +1,12 @@
 'use client';
 
-import { Suspense, useState, useEffect, useRef, useCallback } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import styles from './totem.module.css';
 import { db } from '@/lib/firebase/client';
 import { collection, doc, runTransaction, setDoc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { triggerWebhook } from '@/lib/notify';
-import { Maximize2 } from 'lucide-react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 
 function validateRUT(rut: string) {
   if (!/^[0-9]+[-|‐]{1}[0-9kK]{1}$/.test(rut)) return false;
@@ -25,6 +25,36 @@ function validateRUT(rut: string) {
 }
 
 type Screen = 'menu' | 'categories' | 'oirs' | 'appointment' | 'rut' | 'ticket' | 'appointment_funcionario_select';
+
+// ── Fullscreen (kiosko) ──────────────────────────────────────────────────
+function FullscreenToggle() {
+  const [fsSupported, setFsSupported] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    setFsSupported(!!document.documentElement.requestFullscreen);
+    const onFSChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onFSChange);
+    return () => document.removeEventListener('fullscreenchange', onFSChange);
+  }, []);
+  if (!fsSupported) return null;
+  return (
+    <button
+      type="button"
+      className={styles.fsBtn}
+      data-active={isFullscreen}
+      onClick={() => {
+        if (document.fullscreenElement) {
+          document.exitFullscreen?.().catch(() => {});
+        } else {
+          document.documentElement.requestFullscreen?.().catch(() => {});
+        }
+      }}
+      title={isFullscreen ? 'Salir de Pantalla Completa' : 'Pantalla Completa (oculta la barra del navegador)'}
+    >
+      {isFullscreen ? <Minimize2 size={22} /> : <Maximize2 size={22} />}
+    </button>
+  );
+}
 
 function TotemInner() {
   const searchParams = useSearchParams();
@@ -92,19 +122,6 @@ function TotemInner() {
   }, [institutionId]);
 
   // ── Fullscreen (kiosko) ──────────────────────────────────────────────────
-  const [fsSupported, setFsSupported] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  useEffect(() => {
-    setFsSupported(!!document.documentElement.requestFullscreen);
-    const tryFS = () => {
-      document.documentElement.requestFullscreen?.().then(() => setIsFullscreen(true)).catch(() => {});
-    };
-    tryFS();
-    const onFSChange = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', onFSChange);
-    return () => document.removeEventListener('fullscreenchange', onFSChange);
-  }, []);
-
   const resetFlow = () => {
     if (resetTimerRef.current) { clearTimeout(resetTimerRef.current); resetTimerRef.current = null; }
     setScreen('menu');
@@ -383,6 +400,7 @@ function TotemInner() {
   if (screen === 'ticket' && ticket) {
     return (
       <main className={styles.container}>
+        <FullscreenToggle />
         <div className={`${styles.glassPanel} ${styles.ticketView}`}>
           <h1 className={styles.successTitle}>¡Turno Generado!</h1>
           <p className={styles.instruction}>Por favor, espere su llamado en la pantalla.</p>
@@ -411,21 +429,7 @@ function TotemInner() {
   if (screen === 'menu') {
     return (
       <main className={styles.container}>
-        {fsSupported && !isFullscreen && (
-          <button
-            onClick={() => document.documentElement.requestFullscreen()?.then(() => setIsFullscreen(true)).catch(() => {})}
-            title="Pantalla Completa"
-            style={{
-              position: 'fixed', bottom: '20px', right: '20px', zIndex: 9999,
-              width: '56px', height: '56px', borderRadius: '50%',
-              background: 'var(--primary, #3b82f6)', color: '#fff', border: 'none',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.3)'
-            }}
-          >
-            <Maximize2 size={24} />
-          </button>
-        )}
+        <FullscreenToggle />
         <div className={styles.glassPanel}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', justifyContent: 'center', marginBottom: '0.5rem' }}>
             {totemLogoUrl && <img src={totemLogoUrl} alt="Logo" style={{ height: '60px', width: 'auto', borderRadius: '12px' }} />}
@@ -459,6 +463,7 @@ function TotemInner() {
   if (screen === 'categories') {
     return (
       <main className={styles.container}>
+        <FullscreenToggle />
         <div className={styles.glassPanel}>
           <button className={styles.backBtn} onClick={resetFlow}>← Volver</button>
           <h1 className={styles.title}>Atención General</h1>
@@ -480,6 +485,7 @@ function TotemInner() {
   if (screen === 'appointment') {
     return (
       <main className={styles.container}>
+        <FullscreenToggle />
         <div className={styles.glassPanel}>
           <button type="button" className={styles.backBtn} onClick={resetFlow}>← Volver</button>
           <h1 className={styles.title}>Hora Agendada</h1>
@@ -501,6 +507,7 @@ function TotemInner() {
     const matchingFuncs = funcionarios.filter(f => f.departamento === selectedCategory);
     return (
       <main className={styles.container}>
+        <FullscreenToggle />
         <div className={styles.glassPanel}>
           <button type="button" className={styles.backBtn} onClick={() => setScreen('appointment')}>← Volver</button>
           <h1 className={styles.title}>Hora Agendada - {selectedCategory}</h1>
@@ -528,6 +535,7 @@ function TotemInner() {
 
   return (
     <main className={styles.container}>
+      <FullscreenToggle />
       <div className={styles.glassPanel}>
         <button type="button" className={styles.backBtn} onClick={() => setScreen('menu')}>← Volver</button>
         <h1 className={styles.title}>

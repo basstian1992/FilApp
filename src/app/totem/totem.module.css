@@ -330,6 +330,37 @@
   50% { opacity: 1; }
 }
 
+/* ===== FULLSCREEN TOGGLE ===== */
+
+.fsBtn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--primary, #3b82f6);
+  color: #fff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  opacity: 0.85;
+  transition: opacity 0.2s, transform 0.2s, background 0.2s;
+}
+
+.fsBtn:hover {
+  opacity: 1;
+  transform: scale(1.06);
+}
+
+.fsBtn[data-active='true'] {
+  background: var(--destructive);
+}
+
 /* ===== DARK MODE ADJUSTMENTS ===== */
 
 @media (prefers-color-scheme: dark) {

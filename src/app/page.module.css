@@ -646,6 +646,47 @@
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
+/* Forgot password */
+.forgotBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.35rem 0;
+  margin-top: 0.15rem;
+  transition: color 0.2s, opacity 0.2s;
+}
+
+.forgotBtn:hover {
+  color: var(--primary-hover, var(--primary));
+  text-decoration: underline;
+  opacity: 0.9;
+}
+
+.resetSuccess {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: rgba(16, 185, 129, 0.08);
+  color: var(--success);
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.resetSuccess svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
 /* Divider */
 .dividerRow {
   display: flex;

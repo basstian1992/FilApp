@@ -4,12 +4,12 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { db, auth } from '@/lib/firebase/client';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import styles from './page.module.css';
 import {
   Building2, LogOut, Users, MonitorPlay, Settings, ArrowRight,
-  ShieldCheck, UserCog, Briefcase, Eye, EyeOff, ChevronRight
+  ShieldCheck, UserCog, Briefcase, Eye, EyeOff, ChevronRight, KeyRound, MailCheck
 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -28,6 +28,12 @@ export default function LandingPage() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [instFetchDone, setInstFetchDone] = useState(false);
   const [instError, setInstError] = useState('');
+  const [resetMode, setResetMode] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+  const [resetMessage, setResetMessage] = useState('');
+  const [resetError, setResetError] = useState('');
 
   // Safety timeout: prevent infinite loading
   useEffect(() => {
@@ -152,6 +158,35 @@ export default function LandingPage() {
     await signOut(auth);
     setUserProfile(null);
     setInstitutionName('');
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail.trim()) {
+      setResetError('Ingrese su correo electrónico.');
+      return;
+    }
+    setResetLoading(true);
+    setResetError('');
+    setResetMessage('');
+    try {
+      await sendPasswordResetEmail(auth, resetEmail.trim());
+      setResetSent(true);
+      setResetMessage('Si el correo está registrado, recibirá un enlace para restablecer su contraseña. Revise su bandeja de entrada (y spam).');
+    } catch (err: any) {
+      setResetError(err.message || 'Error al enviar el correo de restablecimiento.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const openResetMode = () => {
+    setResetMode(true);
+    setResetEmail(email || '');
+    setResetSent(false);
+    setResetMessage('');
+    setResetError('');
+    setLoginError('');
   };
 
   /* ─── Real-time watcher: auto-redirect when pending user gets approved ──── */
@@ -430,49 +465,103 @@ export default function LandingPage() {
               <h2>Iniciar Sesión</h2>
             </div>
             <p>Accede a tu panel como Gerente, Administrador o Funcionario.</p>
-            <form onSubmit={handleLogin} className={styles.loginForm}>
-              {loginError && <div className={styles.loginError}>{loginError}</div>}
-              <div className={styles.inputWrap}>
-                <input
-                  type="email"
-                  placeholder="Correo electrónico"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  required
-                  autoComplete="email"
-                />
-              </div>
-              <div className={styles.inputWrap}>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Contraseña"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                />
+
+            {!resetMode ? (
+              <form onSubmit={handleLogin} className={styles.loginForm}>
+                {loginError && <div className={styles.loginError}>{loginError}</div>}
+                <div className={styles.inputWrap}>
+                  <input
+                    type="email"
+                    placeholder="Correo electrónico"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                  />
+                </div>
+                <div className={styles.inputWrap}>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Contraseña"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    className={styles.eyeBtn}
+                    onClick={() => setShowPassword(v => !v)}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <button
+                  type="submit"
+                  className={styles.primaryBtn}
+                  disabled={loginLoading}
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  {loginLoading ? (
+                    <span className={styles.btnSpinner} />
+                  ) : (
+                    <>Ingresar al Panel <ChevronRight size={16} /></>
+                  )}
+                </button>
                 <button
                   type="button"
-                  className={styles.eyeBtn}
-                  onClick={() => setShowPassword(v => !v)}
-                  tabIndex={-1}
+                  className={styles.forgotBtn}
+                  onClick={openResetMode}
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  <KeyRound size={14} /> ¿Olvidaste tu contraseña?
                 </button>
-              </div>
-              <button
-                type="submit"
-                className={styles.primaryBtn}
-                disabled={loginLoading}
-                style={{ width: '100%', justifyContent: 'center' }}
-              >
-                {loginLoading ? (
-                  <span className={styles.btnSpinner} />
-                ) : (
-                  <>Ingresar al Panel <ChevronRight size={16} /></>
+              </form>
+            ) : (
+              <form onSubmit={handlePasswordReset} className={styles.loginForm}>
+                {resetError && <div className={styles.loginError}>{resetError}</div>}
+                {resetMessage && (
+                  <div className={styles.resetSuccess}>
+                    <MailCheck size={16} />
+                    <span>{resetMessage}</span>
+                  </div>
                 )}
-              </button>
-            </form>
+                {!resetSent && (
+                  <>
+                    <div className={styles.inputWrap}>
+                      <input
+                        type="email"
+                        placeholder="Correo electrónico registrado"
+                        value={resetEmail}
+                        onChange={e => setResetEmail(e.target.value)}
+                        required
+                        autoComplete="email"
+                        autoFocus
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className={styles.primaryBtn}
+                      disabled={resetLoading}
+                      style={{ width: '100%', justifyContent: 'center' }}
+                    >
+                      {resetLoading ? (
+                        <span className={styles.btnSpinner} />
+                      ) : (
+                        <>Enviar Enlace de Recuperación <ChevronRight size={16} /></>
+                      )}
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  className={styles.forgotBtn}
+                  onClick={() => { setResetMode(false); setResetError(''); setResetMessage(''); setResetSent(false); }}
+                >
+                  <ChevronRight size={14} style={{ transform: 'rotate(180deg)' }} /> Volver al inicio de sesión
+                </button>
+              </form>
+            )}
           </div>
         </div>
       </div>

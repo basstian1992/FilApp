@@ -123,6 +123,14 @@ function ensureVoicesLoaded(): Promise<SpeechSynthesisVoice[]> {
   return _voiceLoadPromise;
 }
 
+function toTurnoTime(t: Turno): number {
+  const raw: any = t.called_at || t.created_at || 0;
+  if (raw instanceof Date) return raw.getTime();
+  if (raw && typeof raw === 'object' && typeof raw.toDate === 'function') return raw.toDate().getTime();
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
 function selectBestSpanishVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   const spanish = voices.filter(v => v.lang.startsWith('es') && !v.lang.startsWith('es-US'));
   if (spanish.length === 0) return null;
@@ -361,12 +369,12 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
       });
 
       const calledTurnos = allTurnos.filter(t => t.estado === 'llamado' || t.estado === 'atendido');
-      calledTurnos.sort((a, b) => new Date(b.called_at || 0).getTime() - new Date(a.called_at || 0).getTime());
+      calledTurnos.sort((a, b) => toTurnoTime(b) - toTurnoTime(a));
 
-      const latestTurnos = calledTurnos.slice(0, 8);
-      const firstIsLlamado = latestTurnos.length > 0 && latestTurnos[0].estado === 'llamado';
+      const latestTurnos = calledTurnos.slice(0, 9);
+      const activeCall = latestTurnos.find(t => t.estado === 'llamado') || null;
       setTurnos(latestTurnos);
-      setCurrentCall(firstIsLlamado ? latestTurnos[0] : null);
+      setCurrentCall(activeCall);
 
       if (!isFirstLoadLlamado.current) {
         snapshot.docChanges().forEach(change => {
@@ -675,7 +683,7 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
         <aside className={styles.historySection}>
           <div className={styles.historyTitle}>Últimos Llamados</div>
           <div className={styles.historyList}>
-            {turnos.slice(1).map(turno => (
+            {turnos.filter(t => t.id !== currentCall?.id).map(turno => (
               <div key={turno.id} className={styles.historyItem}>
                 <span className={styles.historyTurno}>
                   {turno.letra_ticket ? `${turno.letra_ticket}-` : ''}{turno.numero}
@@ -685,7 +693,7 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
                 </span>
               </div>
             ))}
-            {turnos.length <= 1 && (
+            {turnos.filter(t => t.id !== currentCall?.id).length === 0 && (
               <div className={styles.historyEmpty}>Sin historial</div>
             )}
           </div>

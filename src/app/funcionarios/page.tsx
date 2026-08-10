@@ -1218,7 +1218,7 @@ export default function StaffPage() {
           <>
             <div className={styles.panelLeft}>
               <div className={styles.statCard}>
-            <h3>Pacientes en Espera</h3>
+            <h3>Usuarios en Espera</h3>
             <div className={styles.bigNumber}>{queueCount}</div>
             {queueDocs.length > 0 && (
               <div className={styles.quickQueue}>

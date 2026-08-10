@@ -229,6 +229,9 @@ function TVInner() {
   const [resetting, setResetting] = useState(false);
   const [resetBanner, setResetBanner] = useState('');
 const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+  const [resetCutoff, setResetCutoff] = useState<number | null>(null);
+  const resetCutoffRef = useRef<number | null>(null);
+  useEffect(() => { resetCutoffRef.current = resetCutoff; }, [resetCutoff]);
 
   const audioEnabledRef = useRef(isAudioEnabled);
   const isFirstLoadLlamado = useRef(true);
@@ -329,13 +332,15 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
       if (!institutionId) return;
       try {
         const instSnap = await getDoc(doc(db, 'institutions', institutionId));
-        if (instSnap.exists() && instSnap.data().config) {
-          const cfg = instSnap.data().config;
+        if (instSnap.exists()) {
+          const data = instSnap.data();
+          const cfg = data.config || {};
           if (cfg.mensaje_dia) setMensajeDia(cfg.mensaje_dia);
           if (cfg.tv_name) setTvName(cfg.tv_name);
           if (cfg.logo_url) setLogoUrl(cfg.logo_url);
           if (cfg.tv_primary_color) setTvPrimaryColor(cfg.tv_primary_color);
           if (cfg.tv_background_url) setTvBackgroundUrl(cfg.tv_background_url);
+          if (data.ultimo_reinicio) setResetCutoff(new Date(data.ultimo_reinicio).getTime());
         }
       } catch (e) {}
     };
@@ -347,8 +352,13 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
       : query(turnosRef);
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      const cutoff = resetCutoffRef.current;
       const allTurnos: Turno[] = [];
-      snapshot.forEach(doc => { allTurnos.push({ id: doc.id, ...doc.data() } as Turno); });
+      snapshot.forEach(doc => {
+        const t = { id: doc.id, ...doc.data() } as Turno;
+        const created = t.created_at ? new Date(t.created_at).getTime() : 0;
+        if (!cutoff || created >= cutoff) allTurnos.push(t);
+      });
 
       const calledTurnos = allTurnos.filter(t => t.estado === 'llamado' || t.estado === 'atendido');
       calledTurnos.sort((a, b) => new Date(b.called_at || 0).getTime() - new Date(a.called_at || 0).getTime());
@@ -382,7 +392,13 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
 
     const unsubEspera = onSnapshot(qEspera, (snapshot) => {
       isFirstLoadEspera.current = false;
-      const ingresos = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Turno));
+      const cutoff = resetCutoffRef.current;
+      const ingresos = snapshot.docs
+        .map(d => ({ id: d.id, ...d.data() } as Turno))
+        .filter(t => {
+          const created = t.created_at ? new Date(t.created_at).getTime() : 0;
+          return !cutoff || created >= cutoff;
+        });
       ingresos.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
       setNuevosIngresos(ingresos.slice(0, 6));
 
@@ -424,6 +440,7 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
         setNuevosIngresos([]);
         setCurrentCall(null);
         setCurrentUserName('');
+        setResetCutoff(Date.now());
         setResetBanner('Conteo reiniciado a 0');
         window.speechSynthesis?.cancel();
         setTimeout(() => setResetBanner(''), 5000);

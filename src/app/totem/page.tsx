@@ -52,6 +52,7 @@ function FullscreenToggle() {
       title={isFullscreen ? 'Salir de Pantalla Completa' : 'Pantalla Completa (oculta la barra del navegador)'}
     >
       {isFullscreen ? <Minimize2 size={22} /> : <Maximize2 size={22} />}
+      <span>{isFullscreen ? 'Salir' : 'Pantalla Completa'}</span>
     </button>
   );
 }

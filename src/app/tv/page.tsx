@@ -565,7 +565,7 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
                 }}
                 title="Probar voz seleccionada"
               >
-                <Mic size={16} />
+                <Mic size={22} />
               </button>
             </div>
           )}
@@ -575,14 +575,14 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
             onClick={() => setIsAudioEnabled(!isAudioEnabled)}
             title={isAudioEnabled ? 'Desactivar Audio' : 'Activar Audio'}
           >
-            {isAudioEnabled ? <Volume2 size={22} /> : <VolumeX size={22} />}
+            {isAudioEnabled ? <Volume2 size={26} /> : <VolumeX size={26} />}
           </button>
           <button
             className={styles.themeToggle}
             onClick={() => setTheme(isDark ? 'light' : 'dark')}
             title={isDark ? 'Modo Claro' : 'Modo Oscuro'}
           >
-            {isDark ? <Sun size={18} /> : <Moon size={18} />}
+            {isDark ? <Sun size={22} /> : <Moon size={22} />}
           </button>
           <button
             className={styles.resetBtn}
@@ -590,7 +590,7 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
             disabled={resetting}
             title="Reiniciar conteo a cero y limpiar pantalla"
           >
-            <RotateCcw size={16} />
+            <RotateCcw size={20} />
             {resetting ? 'Reiniciando...' : 'Reiniciar'}
           </button>
           {fsSupported && !isFullscreen && (
@@ -600,7 +600,7 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
               title="Pantalla Completa"
               style={{ borderColor: 'var(--tv-primary, #3b82f6)', color: 'var(--tv-primary, #3b82f6)' }}
             >
-              <Maximize2 size={18} />
+              <Maximize2 size={22} />
             </button>
           )}
         </div>

@@ -128,15 +128,15 @@
 .headerActions {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.9rem;
 }
 
 .audioToggle, .themeToggle, .voicePreviewBtn {
   background: var(--tv-glass-bg);
   border: 1px solid var(--tv-border-strong);
   color: var(--tv-text-muted);
-  padding: 0.75rem;
-  border-radius: 14px;
+  padding: 1rem;
+  border-radius: 18px;
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
@@ -153,18 +153,18 @@
 .voiceSelectorWrap {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.5rem;
 }
 
 .voiceSelect {
   background: var(--tv-glass-bg);
   border: 1px solid var(--tv-border-strong);
   color: var(--tv-text-primary);
-  font-size: 0.75rem;
-  padding: 0.4rem 0.6rem;
-  border-radius: 10px;
+  font-size: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 14px;
   cursor: pointer;
-  max-width: 180px;
+  max-width: 220px;
   outline: none;
   font-family: inherit;
 }
@@ -183,15 +183,15 @@
 .resetBtn {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.6rem;
   background: rgba(239, 68, 68, 0.12);
   border: 1px solid rgba(239, 68, 68, 0.35);
   color: #f87171;
-  padding: 0.65rem 0.9rem;
-  border-radius: 12px;
+  padding: 1rem 1.4rem;
+  border-radius: 16px;
   cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: 1.1rem;
+  font-weight: 700;
   font-family: inherit;
   transition: all 0.3s ease;
   white-space: nowrap;
@@ -211,7 +211,7 @@
 
 .resetBanner {
   position: fixed;
-  top: 5.5rem;
+  top: 6.5rem;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -219,9 +219,9 @@
   gap: 0.5rem;
   background: rgba(16, 185, 129, 0.95);
   color: #fff;
-  font-size: 1rem;
+  font-size: 1.25rem;
   font-weight: 700;
-  padding: 0.9rem 1.8rem;
+  padding: 1rem 2rem;
   border-radius: 14px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   z-index: 100;

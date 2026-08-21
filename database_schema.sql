@@ -66,3 +66,37 @@ CREATE POLICY "Permitir lectura pública de especialistas" ON public.especialist
 CREATE POLICY "Permitir inserción de turnos" ON public.turnos FOR INSERT WITH CHECK (true);
 CREATE POLICY "Permitir lectura de turnos" ON public.turnos FOR SELECT USING (true);
 CREATE POLICY "Permitir actualización de turnos" ON public.turnos FOR UPDATE USING (true); -- Idealmente restringir a Auth en producción
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- MODELO MULTI-DEPENDENCIA (Firestore)
+-- Cada institución (ej: municipio) puede tener varias dependencias físicas
+-- (sedes). Cada sede tiene sus propios departamentos, su propio contador de
+-- tickets (currentTurno / ultimo_reinicio viven en el doc de la sede) y una
+-- TV y un Tótem independientes vía URLs:
+--   /tv?institution={id}&sede={sedeId}
+--   /totem?institution={id}&sede={sedeId}
+--
+-- Colección `sedes`:
+--   institution_id  → id de la institución dueña
+--   nombre          → "Casa Consistorial", "CESFAM Norte", etc.
+--   direccion       → opcional
+--   departamentos   → string[] departamentos/oficinas de esta dependencia
+--   currentTurno    → contador de tickets independiente por dependencia
+--   ultimo_reinicio → reset diario independiente por dependencia
+--   created_at
+--
+-- Campos nuevos relacionados:
+--   turnos.sede_id         → dependencia que emitió el ticket (null = central)
+--   especialistas.sede_id  → dependencia donde atiende el funcionario
+--
+-- Colección `usuarios` (NO se segmenta por dependencia):
+--   La base de usuarios es ESTANDARIZADA a nivel de institución: la clave del
+--   documento es el RUT y cada doc se etiqueta con institution_id (nunca con
+--   sede_id). Así todas las dependencias comparten la misma base segura y un
+--   ciudadano registrado en cualquier sede existe para las demás.
+--   Reglas: solo clientes autenticados; el Tótem/TV (públicos) consultan y
+--   dan de alta RUTs vía /api/usuarios usando credenciales de administrador.
+--
+-- Retrocompatible: instituciones sin documentos en `sedes` funcionan igual
+-- que antes (contador y URLs a nivel de institución).
+-- ═══════════════════════════════════════════════════════════════════════════

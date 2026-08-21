@@ -214,6 +214,7 @@ function speakText(texto: string, audioEnabled: boolean, forcedVoice?: SpeechSyn
 function TVInner() {
   const searchParams = useSearchParams();
   const institutionId = searchParams.get('institution');
+  const sedeId = searchParams.get('sede');
 
   const { theme, setTheme, resolvedTheme } = useTheme();
   const currentTheme = theme === 'system' ? resolvedTheme : theme;
@@ -226,6 +227,7 @@ function TVInner() {
   const [showInitOverlay, setShowInitOverlay] = useState(true);
   const [mensajeDia, setMensajeDia] = useState('Bienvenidos a nuestra institución.');
   const [tvName, setTvName] = useState('FilApp');
+  const [sedeName, setSedeName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [tvPrimaryColor, setTvPrimaryColor] = useState('');
   const [tvBackgroundUrl, setTvBackgroundUrl] = useState('');
@@ -233,7 +235,8 @@ function TVInner() {
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceIndex, setSelectedVoiceIndex] = useState(-1);
   const [showVoicePicker, setShowVoicePicker] = useState(false);
-  const [currentUserName, setCurrentUserName] = useState('');
+  const [resolvedNames, setResolvedNames] = useState<Record<string, string>>({});
+  const namesCacheRef = useRef<Record<string, string>>({});
   const [resetting, setResetting] = useState(false);
   const [resetBanner, setResetBanner] = useState('');
 const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
@@ -263,17 +266,37 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
     return () => document.removeEventListener('fullscreenchange', onFSChange);
   }, []);
 
-  // Lookup user name when currentCall changes
+  // Resuelve nombres de usuarios YA REGISTRADOS para todos los turnos visibles.
+  // Privacidad: el RUT nunca se muestra en pantalla; si no hay nombre registrado
+  // se muestra solo el ticket. `usuarios` está protegida por reglas, por lo que
+  // las pantallas públicas consultan vía /api/usuarios (solo devuelve nombres).
   useEffect(() => {
-    if (currentCall?.rut_usuario) {
-      getDoc(doc(db, 'usuarios', currentCall.rut_usuario)).then(snap => {
-        if (snap.exists()) {
-          const d = snap.data();
-          setCurrentUserName(d.nombre_completo || '');
-        } else setCurrentUserName('');
-      }).catch(() => setCurrentUserName(''));
-    } else setCurrentUserName('');
-  }, [currentCall?.id, currentCall?.rut_usuario]);
+    if (!institutionId) return;
+    const pending = new Set<string>();
+    [currentCall, ...turnos, ...nuevosIngresos].forEach(t => {
+      if (t?.rut_usuario && !(t.rut_usuario in namesCacheRef.current)) pending.add(t.rut_usuario);
+    });
+    if (pending.size === 0) return;
+    let cancelled = false;
+    fetch('/api/usuarios', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ruts: Array.from(pending).slice(0, 60), institutionId }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (cancelled || !d.success) return;
+        Object.assign(namesCacheRef.current, d.nombres || {});
+        pending.forEach(r => { if (!(r in namesCacheRef.current)) namesCacheRef.current[r] = ''; });
+        setResolvedNames({ ...namesCacheRef.current });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [currentCall, turnos, nuevosIngresos, institutionId]);
+
+  // Nombre a mostrar: registrado → nombre; si no, vacío (la UI cae al ticket)
+  const displayName = (t?: Turno | null) =>
+    t ? (t.nombre_paciente || resolvedNames[t.rut_usuario || ''] || '') : '';
 
   // Apply CSS variables directly to root element (most reliable approach)
   useEffect(() => {
@@ -350,14 +373,30 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
           if (cfg.tv_background_url) setTvBackgroundUrl(cfg.tv_background_url);
           if (data.ultimo_reinicio) setResetCutoff(new Date(data.ultimo_reinicio).getTime());
         }
+
+        // Dependencia (sede): nombre propio y cutoff de reinicio propio
+        if (sedeId) {
+          const sedeSnap = await getDoc(doc(db, 'sedes', sedeId));
+          if (sedeSnap.exists() && sedeSnap.data()?.institution_id === institutionId) {
+            setSedeName(sedeSnap.data().nombre || '');
+            const sedeReset = sedeSnap.data().ultimo_reinicio;
+            if (sedeReset) setResetCutoff(new Date(sedeReset).getTime());
+          } else {
+            setSedeName('');
+          }
+        } else {
+          setSedeName('');
+        }
       } catch (e) {}
     };
     if (institutionId) fetchConfig();
 
     const turnosRef = collection(db, 'turnos');
-    const q = institutionId
-      ? query(turnosRef, where('institution_id', '==', institutionId))
-      : query(turnosRef);
+    // Con dependencia seleccionada solo se muestran los turnos de esa dependencia
+    const baseConstraints = [];
+    if (institutionId) baseConstraints.push(where('institution_id', '==', institutionId));
+    if (sedeId) baseConstraints.push(where('sede_id', '==', sedeId));
+    const q = query(turnosRef, ...baseConstraints);
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const cutoff = resetCutoffRef.current;
@@ -394,9 +433,10 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
       isFirstLoadLlamado.current = false;
     });
 
-    const qEspera = institutionId
-      ? query(turnosRef, where('estado', '==', 'espera'), where('institution_id', '==', institutionId))
-      : query(turnosRef, where('estado', '==', 'espera'));
+    const esperaConstraints = [where('estado', '==', 'espera')];
+    if (institutionId) esperaConstraints.push(where('institution_id', '==', institutionId));
+    if (sedeId) esperaConstraints.push(where('sede_id', '==', sedeId));
+    const qEspera = query(turnosRef, ...esperaConstraints);
 
     const unsubEspera = onSnapshot(qEspera, (snapshot) => {
       isFirstLoadEspera.current = false;
@@ -418,7 +458,23 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
     });
 
     return () => { unsubscribe(); unsubEspera(); };
-  }, [institutionId]);
+  }, [institutionId, sedeId]);
+
+  // Auto-cierre de turnos trabados: cada 60 s pide al servidor devolver a
+  // 'espera' los turnos llamados hace >15 min cuyo funcionario está fuera de
+  // línea. La TV es la pantalla siempre encendida, ideal para orquestarlo.
+  useEffect(() => {
+    if (!institutionId) return;
+    const tick = () => {
+      fetch('/api/auto-close', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ institutionId, sedeId: sedeId || undefined }),
+      }).catch(() => {});
+    };
+    const iv = setInterval(tick, 60000);
+    return () => clearInterval(iv);
+  }, [institutionId, sedeId]);
 
   const startAudio = () => {
     setIsAudioEnabled(true);
@@ -440,14 +496,15 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
       const res = await fetch('/api/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ institutionId, nombre: actor }),
+        body: JSON.stringify({ institutionId, sedeId: sedeId || undefined, nombre: actor }),
       });
       const data = await res.json();
       if (data.success) {
         setTurnos([]);
         setNuevosIngresos([]);
         setCurrentCall(null);
-        setCurrentUserName('');
+        namesCacheRef.current = {};
+        setResolvedNames({});
         setResetCutoff(Date.now());
         setResetBanner('Conteo reiniciado a 0');
         window.speechSynthesis?.cancel();
@@ -546,7 +603,7 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
       <header className={styles.header}>
         <div className={styles.logo} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {logoUrl ? <img src={logoUrl} alt="Logo Institución" className={styles.tvLogoImg} /> : null}
-          {tvName}
+          {tvName}{sedeName ? ` — ${sedeName}` : ''}
         </div>
         <div className={styles.headerCenter}>
           {clock && <span>{clock}</span>}
@@ -628,7 +685,7 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
             {currentCall ? (
               <>
                 <div className={styles.callPatient}>
-                  {currentCall.nombre_paciente || currentUserName || currentCall.rut_usuario || `Turno ${currentCall.letra_ticket ? currentCall.letra_ticket.charAt(0).toUpperCase() + '-' : ''}${currentCall.numero}`}
+                  {displayName(currentCall) || `Turno ${currentCall.letra_ticket ? currentCall.letra_ticket.charAt(0).toUpperCase() + '-' : ''}${currentCall.numero}`}
                 </div>
                 {(currentCall.departamento || currentCall.letra_especialista) && (
                   <div className={styles.callModule}>
@@ -669,7 +726,7 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
                   return (
                     <div key={ing.id} className={styles.ingresoItem}>
                       <span>{ingTicketLetter ? `${ingTicketLetter}-` : ''}{ing.numero}</span>
-                      <span className={styles.ingresoRut}>{ing.nombre_paciente || ing.rut_usuario || ''}</span>
+                      <span className={styles.ingresoRut}>{displayName(ing)}</span>
                     </div>
                   );
                 })
@@ -689,7 +746,7 @@ const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
                   {turno.letra_ticket ? `${turno.letra_ticket}-` : ''}{turno.numero}
                 </span>
                 <span className={styles.historyPatient}>
-                  {turno.nombre_paciente || turno.rut_usuario || '—'}
+                  {displayName(turno) || '—'}
                 </span>
               </div>
             ))}

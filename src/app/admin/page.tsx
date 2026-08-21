@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { db, auth } from '@/lib/firebase/client';
 import {
@@ -11,14 +11,16 @@ import { getAuth as _getAuth } from 'firebase/auth';
 import { initializeApp, getApps } from 'firebase/app';
 import {
   collection, query, where, getDocs, doc, setDoc,
-  onSnapshot, updateDoc, orderBy, addDoc, getDoc, deleteDoc
+  onSnapshot, updateDoc, orderBy, addDoc, getDoc, deleteDoc,
+  getCountFromServer
 } from 'firebase/firestore';
 import styles from './admin.module.css';
 import {
   Settings, BarChart3, Users, Clock, AlertTriangle,
   Download, LogOut, Building2, UserPlus, ArrowLeft, Plus,
   Link2, Eye, Shield, UserCog, ChevronRight, Monitor,
-  Tablet, LayoutDashboard, FileText, PlusCircle, Trash2, CheckCircle, ClipboardList, Upload
+  Tablet, LayoutDashboard, FileText, PlusCircle, Trash2, CheckCircle, ClipboardList, Upload,
+  MapPin, Pencil, Activity, RefreshCw
 } from 'lucide-react';
 import UserDirectory from '@/components/UserDirectory';
 import { useToast } from '@/components/Toast';
@@ -66,7 +68,7 @@ async function createUserSecondary(email: string, password: string) {
 }
 
 /* ─── Types ─────────────────────────────────────────────────────────────────── */
-type AdminTab = 'dashboard' | 'config' | 'funcionarios' | 'directorio' | 'reportes';
+type AdminTab = 'dashboard' | 'config' | 'pantallas' | 'dependencias' | 'funcionarios' | 'directorio' | 'reportes';
 type GerenteTab = 'instituciones' | 'administradores' | 'reportes';
 
 /* ─── Module Inline Editor ──────────────────────────────────────────────────── */
@@ -115,6 +117,76 @@ function ModuleEditor({ funcionario, onSaved }: { funcionario: any; onSaved: (ne
   );
 }
 
+/* ─── Analytics helpers (datos reales de Firestore) ─────────────────────────── */
+// Paleta consistente: cada dependencia mantiene su color en todos los gráficos
+const DEP_PALETTE = ['#3b82f6', '#8b5cf6', '#f59e0b', '#22c55e', '#ec4899', '#14b8a6', '#f97316'];
+
+function BarList({ title, items, color, empty }: { title: string; items: { nombre: string; count: number; color?: string }[]; color: string; empty: string }) {
+  const max = Math.max(...items.map(i => i.count), 1);
+  return (
+    <div style={{ flex: 1, minWidth: '280px', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '0.9rem' }}>
+      <h3 style={{ fontSize: '0.85rem', fontWeight: 700, margin: '0 0 0.6rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+        <BarChart3 size={14} /> {title}
+      </h3>
+      {items.length === 0 ? (
+        <p className={styles.noData}>{empty}</p>
+      ) : items.map(it => (
+        <div key={it.nombre} style={{ marginBottom: '0.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '2px' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+              {it.color && <span style={{ width: 8, height: 8, borderRadius: 2, background: it.color, display: 'inline-block' }} />}
+              {it.nombre}
+            </span>
+            <strong>{it.count}</strong>
+          </div>
+          <div style={{ height: 8, background: 'var(--surface-secondary)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ width: `${(it.count / max) * 100}%`, height: '100%', background: it.color || color, borderRadius: 4, transition: 'width 0.3s' }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ScreenCard({ nombre, sublabel, turno, ultimo, funcionarios, tvUrl, totemUrl, tvHref, totemHref }: {
+  nombre: string; sublabel: string; turno?: number; ultimo?: string | null; funcionarios: number;
+  tvUrl: string; totemUrl: string; tvHref: string; totemHref: string;
+}) {
+  return (
+    <div className={styles.card} style={{ marginTop: '1rem' }}>
+      <div className={styles.deptHeader}>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <Building2 size={16} /> {nombre}
+        </h3>
+        <span className={styles.deptCount}>{sublabel}</span>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', margin: '0.4rem 0 0.9rem' }}>
+        <span className={styles.chip}><Clock size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} /> Ticket actual: #{turno ?? 0}</span>
+        <span className={styles.chip}>Último reinicio: {ultimo ? new Date(ultimo).toLocaleString('es-CL') : '—'}</span>
+        <span className={styles.chip}><Users size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} /> {funcionarios} funcionario{funcionarios !== 1 ? 's' : ''}</span>
+      </div>
+      <div className={styles.formRow}>
+        <div className={styles.formGroup}>
+          <label><Monitor size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> TV (sala de espera)</label>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <input type="text" readOnly value={tvUrl} onClick={e => (e.target as HTMLInputElement).select()} style={{ flex: 1, cursor: 'text', background: 'var(--bg-color)' }} />
+            <button type="button" onClick={() => navigator.clipboard.writeText(tvUrl)} className={styles.btnPrimary}>Copiar</button>
+            <a href={tvHref} target="_blank" rel="noopener noreferrer" className={styles.btnGhost} style={{ padding: '0 0.75rem' }}><Eye size={16} /></a>
+          </div>
+        </div>
+        <div className={styles.formGroup}>
+          <label><Tablet size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> Tótem (autoatención)</label>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <input type="text" readOnly value={totemUrl} onClick={e => (e.target as HTMLInputElement).select()} style={{ flex: 1, cursor: 'text', background: 'var(--bg-color)' }} />
+            <button type="button" onClick={() => navigator.clipboard.writeText(totemUrl)} className={styles.btnPrimary}>Copiar</button>
+            <a href={totemHref} target="_blank" rel="noopener noreferrer" className={styles.btnGhost} style={{ padding: '0 0.75rem' }}><Eye size={16} /></a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Component ──────────────────────────────────────────────────────────────── */
 export default function AdminPage() {
   const router = useRouter();
@@ -152,15 +224,28 @@ export default function AdminPage() {
   const [webhookUrl, setWebhookUrl] = useState('');
   const [resetLogs, setResetLogs] = useState<any[]>([]);
   const [savingConfig, setSavingConfig] = useState(false);
-  const [stats, setStats] = useState({ enEspera: 0, atendidosHoy: 0, tEspera: 0, tAtencion: 0 });
+  // Datos reales para KPIs y gráficos (todos los turnos de la institución)
+  const [allTurnos, setAllTurnos] = useState<any[]>([]);
+  const [usuariosCount, setUsuariosCount] = useState(0);
+  const [resettingStats, setResettingStats] = useState(false);
+  const [instDoc, setInstDoc] = useState<any>(null);
   const [funcionarios, setFuncionarios] = useState<any[]>([]);
   const [pendingFuncionarios, setPendingFuncionarios] = useState<any[]>([]);
+
+  // Dependencias (sedes) de la institución
+  const [sedes, setSedes] = useState<any[]>([]);
+  const [newSedeNombre, setNewSedeNombre] = useState('');
+  const [newSedeDir, setNewSedeDir] = useState('');
+  const [newSedeDeptos, setNewSedeDeptos] = useState('');
+  const [editingSedeId, setEditingSedeId] = useState<string | null>(null);
+  const [sedeSaving, setSedeSaving] = useState(false);
 
   // New user form
   const [funcEmail, setFuncEmail] = useState('');
   const [funcPass, setFuncPass] = useState('');
   const [funcNombre, setFuncNombre] = useState('');
   const [funcDepto, setFuncDepto] = useState('');
+  const [funcSede, setFuncSede] = useState('');
   const [funcCargo, setFuncCargo] = useState('');
   const [funcLetra, setFuncLetra] = useState('');
   const [funcInstId, setFuncInstId] = useState(''); // institution to assign to new admin
@@ -179,6 +264,8 @@ export default function AdminPage() {
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
   const [bulkFileName, setBulkFileName] = useState('');
   const unsubFuncionariosRef = useRef<(() => void) | null>(null);
+  const unsubSedesRef = useRef<(() => void) | null>(null);
+  const instUnsubRef = useRef<(() => void) | null>(null);
 
   /* ── Auth effect ─────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -244,37 +331,105 @@ export default function AdminPage() {
     if (activeTab === 'reportes') fetchBitacora();
   }, [activeTab, institutionId]);
 
-  // Live stats — scoped to current institution only
+  // Live data — scoped to current institution only
   useEffect(() => {
     if (!institutionId) return;
-    fetchStats();
+    const loadTurnos = async () => {
+      try {
+        const snap = await getDocs(query(collection(db, 'turnos'), where('institution_id', '==', institutionId)));
+        setAllTurnos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (err) { console.error(err); }
+    };
+    loadTurnos();
+    getCountFromServer(query(collection(db, 'usuarios'), where('institution_id', '==', institutionId)))
+      .then(s => setUsuariosCount(s.data().count))
+      .catch(() => setUsuariosCount(0));
     const unsub = onSnapshot(
       query(collection(db, 'turnos'), where('institution_id', '==', institutionId)),
-      () => fetchStats()
+      () => loadTurnos()
     );
     return () => unsub();
   }, [institutionId]);
 
-  const fetchStats = async () => {
-    if (!institutionId) return;
-    const [waitSnap, attSnap] = await Promise.all([
-      getDocs(query(collection(db, 'turnos'), where('estado', '==', 'espera'), where('institution_id', '==', institutionId))),
-      getDocs(query(collection(db, 'turnos'), where('estado', '==', 'atendido'), where('institution_id', '==', institutionId)))
-    ]);
+  // Analítica derivada de datos reales
+  const analytics = useMemo(() => {
+    const tz = 'America/Santiago';
+    const dayKey = (iso: any) => new Date(iso).toLocaleDateString('en-CA', { timeZone: tz });
+    const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+
+    const porDia: { label: string; key: string; count: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const key = d.toLocaleDateString('en-CA', { timeZone: tz });
+      porDia.push({
+        label: d.toLocaleDateString('es-CL', { weekday: 'short', timeZone: tz }).replace('.', ''),
+        key,
+        count: allTurnos.filter(t => t.created_at && dayKey(t.created_at) === key).length,
+      });
+    }
+
+    const attended = allTurnos.filter(t => t.estado === 'atendido');
+    const waiting = allTurnos.filter(t => t.estado === 'espera');
     let tE = 0, tA = 0, n = 0;
-    attSnap.forEach(d => {
-      const t = d.data();
-      if (t.called_at && t.created_at)   tE += (new Date(t.called_at).getTime() - new Date(t.created_at).getTime()) / 60000;
-      if (t.finished_at && t.called_at)  tA += (new Date(t.finished_at).getTime() - new Date(t.called_at).getTime()) / 60000;
+    attended.forEach((t: any) => {
+      if (t.called_at && t.created_at) tE += (new Date(t.called_at).getTime() - new Date(t.created_at).getTime()) / 60000;
+      if (t.finished_at && t.called_at) tA += (new Date(t.finished_at).getTime() - new Date(t.called_at).getTime()) / 60000;
       n++;
     });
-    setStats({ enEspera: waitSnap.size, atendidosHoy: attSnap.size, tEspera: n ? Math.round(tE / n) : 0, tAtencion: n ? Math.round(tA / n) : 0 });
-  };
+
+    const depMap = new Map<string, number>();
+    allTurnos.forEach((t: any) => {
+      const nombre = t.sede_id ? (sedes.find((s: any) => s.id === t.sede_id)?.nombre || 'Otra dependencia') : 'Sede Central';
+      depMap.set(nombre, (depMap.get(nombre) || 0) + 1);
+    });
+    const porDependencia = Array.from(depMap.entries())
+      .map(([nombre, count]) => ({ nombre, count }))
+      .sort((a, b) => b.count - a.count)
+      .map((e, i) => ({ ...e, color: DEP_PALETTE[i % DEP_PALETTE.length] }));
+
+    // Tendencia: total últimos 7 días vs los 7 días anteriores
+    const sum7 = porDia.reduce((a, d) => a + d.count, 0);
+    let prev7 = 0;
+    for (let i = 13; i >= 7; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const key = d.toLocaleDateString('en-CA', { timeZone: tz });
+      prev7 += allTurnos.filter(t => t.created_at && dayKey(t.created_at) === key).length;
+    }
+    const tendencia = prev7 > 0 ? Math.round(((sum7 - prev7) / prev7) * 100) : null;
+
+    const deptMap = new Map<string, number>();
+    allTurnos.forEach((t: any) => {
+      const nombre = t.departamento_solicitado || 'Sin categoría';
+      deptMap.set(nombre, (deptMap.get(nombre) || 0) + 1);
+    });
+    const porDepto = Array.from(deptMap.entries()).map(([nombre, count]) => ({ nombre, count })).sort((a, b) => b.count - a.count).slice(0, 6);
+
+    const estados: Record<string, number> = { espera: 0, llamado: 0, atendido: 0, saltado: 0 };
+    allTurnos.forEach((t: any) => {
+      const e = t.estado || 'espera';
+      estados[e] = (estados[e] || 0) + 1;
+    });
+
+    return {
+      total: allTurnos.length,
+      hoy: allTurnos.filter(t => t.created_at && dayKey(t.created_at) === todayKey).length,
+      enEspera: waiting.length,
+      atendidosHoy: attended.filter(t => t.created_at && dayKey(t.created_at) === todayKey).length,
+      tEspera: n ? Math.round(tE / n) : 0,
+      tAtencion: n ? Math.round(tA / n) : 0,
+      tendencia,
+      porDia, porDependencia, porDepto, estados,
+    };
+  }, [allTurnos, sedes]);
 
   /* ── Actions ─────────────────────────────────────────────────────────────── */
   const handleLogout = async () => {
     unsubFuncionariosRef.current?.();
     unsubFuncionariosRef.current = null;
+    unsubSedesRef.current?.();
+    unsubSedesRef.current = null;
+    instUnsubRef.current?.();
+    instUnsubRef.current = null;
     await signOut(auth); router.push('/');
   };
 
@@ -375,7 +530,24 @@ export default function AdminPage() {
         setOirsDpto(d.config?.oirs_departamento || 'OIRS');
         setWebhookUrl(d.config?.n8n_webhook_url || '');
         setResetLogs(d.reset_logs || []);
+        // Suscripción en vivo al doc de la institución (contador central para la pestaña Pantallas)
+        const unsubInst = onSnapshot(doc(db, 'institutions', instId), (s) => {
+          if (s.exists()) setInstDoc({ id: s.id, ...s.data() });
+        });
+        instUnsubRef.current = unsubInst;
         await loadFuncionarios(instId);
+        // Suscripción en vivo a las dependencias (sedes) de esta institución
+        unsubSedesRef.current?.();
+        const unsubSedes = onSnapshot(
+          query(collection(db, 'sedes'), where('institution_id', '==', instId)),
+          (snapSedes) => {
+            const list = snapSedes.docs.map(sd => ({ id: sd.id, ...sd.data() }));
+            list.sort((a: any, b: any) => (a.nombre || '').localeCompare(b.nombre || ''));
+            setSedes(list);
+          }
+        );
+        unsubSedesRef.current = unsubSedes;
+        resetSedeForm();
         setView('detail');
         setActiveTab('dashboard');
       }
@@ -384,6 +556,61 @@ export default function AdminPage() {
       toast('Error al cargar la institución.', 'error');
     }
     setLoading(false);
+  };
+
+  /* ── Dependencias (sedes) ─────────────────────────────────────────────────── */
+  const resetSedeForm = () => {
+    setNewSedeNombre(''); setNewSedeDir(''); setNewSedeDeptos(''); setEditingSedeId(null);
+  };
+
+  const handleSaveSede = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!institutionId || !newSedeNombre.trim()) return;
+    setSedeSaving(true);
+    const departamentos = newSedeDeptos.split(',').map(s => s.trim()).filter(Boolean);
+    try {
+      if (editingSedeId) {
+        await updateDoc(doc(db, 'sedes', editingSedeId), {
+          nombre: newSedeNombre.trim(),
+          direccion: newSedeDir.trim(),
+          departamentos,
+        });
+        toast('Dependencia actualizada');
+      } else {
+        await addDoc(collection(db, 'sedes'), {
+          institution_id: institutionId,
+          nombre: newSedeNombre.trim(),
+          direccion: newSedeDir.trim(),
+          departamentos: departamentos.length ? departamentos : ['Atención General'],
+          currentTurno: 0,
+          ultimo_reinicio: null,
+          created_at: new Date().toISOString(),
+        });
+        toast('Dependencia creada');
+      }
+      resetSedeForm();
+    } catch (err: any) {
+      toast('Error al guardar dependencia: ' + err.message, 'error');
+    }
+    setSedeSaving(false);
+  };
+
+  const startEditSede = (sede: any) => {
+    setEditingSedeId(sede.id);
+    setNewSedeNombre(sede.nombre || '');
+    setNewSedeDir(sede.direccion || '');
+    setNewSedeDeptos((sede.departamentos || []).join(', '));
+    setActiveTab('dependencias');
+  };
+
+  const handleDeleteSede = async (sedeId: string, nombre: string) => {
+    if (!confirm(`¿Eliminar la dependencia "${nombre}"?\n\nLos funcionarios asignados quedarán sin dependencia y los turnos históricos se conservan.`)) return;
+    try {
+      await deleteDoc(doc(db, 'sedes', sedeId));
+      toast('Dependencia eliminada');
+    } catch (err: any) {
+      toast('Error al eliminar: ' + err.message, 'error');
+    }
   };
 
   const saveConfig = async () => {
@@ -418,6 +645,39 @@ export default function AdminPage() {
     }
   };
 
+  // Pone en 0 las estadísticas: borra todos los turnos de la institución vía API
+  const handleResetStats = async () => {
+    if (!institutionId) return;
+    const step1 = confirm(
+      '⚠️ REINICIAR ESTADÍSTICAS\n\n' +
+      'Esto eliminará PERMANENTEMENTE todos los turnos de la institución ' +
+      '(de la sede central y de todas las dependencias) y dejará los contadores y gráficos en 0.\n\n' +
+      'Los usuarios registrados, funcionarios y dependencias NO se afectan.\n\n¿Continuar?'
+    );
+    if (!step1) return;
+    const phrase = prompt('Para confirmar, escribe exactamente:  BORRAR DATOS');
+    if (phrase !== 'BORRAR DATOS') { toast('Cancelado. El texto no coincide.', 'warning'); return; }
+    setResettingStats(true);
+    try {
+      // La API exige ID token de Firebase de un admin/gerente autorizado
+      const idToken = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/reset-stats', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify({ institutionId }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Error del servidor');
+      toast(`Estadísticas reiniciadas (${data.deleted} turno${data.deleted !== 1 ? 's' : ''} eliminado${data.deleted !== 1 ? 's' : ''}).`);
+    } catch (err: any) {
+      toast('Error al reiniciar estadísticas: ' + err.message, 'error');
+    }
+    setResettingStats(false);
+  };
+
   const handleRegisterUser = async (e: React.FormEvent, role: 'admin' | 'funcionario') => {
     e.preventDefault();
     setFuncLoading(true); setFuncMsg('');
@@ -435,6 +695,7 @@ export default function AdminPage() {
         role,
         nombre: funcNombre || (role === 'admin' ? 'Administrador' : 'Funcionario'),
         departamento: role === 'funcionario' ? funcDepto : 'Administración',
+        sede_id: role === 'funcionario' ? (funcSede || '') : '',
         cargo: funcCargo || (role === 'admin' ? 'Administrador' : 'Funcionario'),
         estado_funcionario: 'activo', // admins start active; funcionarios start active when directly registered
         avatar_url: '',
@@ -451,7 +712,7 @@ export default function AdminPage() {
         });
       }
       setFuncMsg(`✅ ${role === 'admin' ? 'Administrador' : 'Funcionario'} "${funcNombre}" registrado.`);
-      setFuncEmail(''); setFuncPass(''); setFuncNombre(''); setFuncDepto('');
+      setFuncEmail(''); setFuncPass(''); setFuncNombre(''); setFuncDepto(''); setFuncSede('');
       setFuncCargo(''); setFuncLetra(''); setFuncInstId('');
       if (role === 'funcionario' && institutionId) await loadFuncionarios(institutionId);
       else await loadDashboard(userProfile.user_id, userProfile.role);
@@ -567,7 +828,16 @@ export default function AdminPage() {
           rut,
           comuna,
         });
-        await setDoc(doc(db, 'usuarios', newUid), { merge: true } as any);
+        // Base estandarizada por institución: clave = RUT formateado XXXXXXXX-X
+        // (igual que el Tótem), nunca el UID, para que todas las dependencias
+        // compartan la misma base y la TV resuelva el nombre del usuario.
+        if (rut && !rut.endsWith('-')) {
+          await setDoc(
+            doc(db, 'usuarios', rut),
+            { rut, institution_id: institutionId, created_at: new Date().toISOString() },
+            { merge: true }
+          );
+        }
         ok.push(email);
       } catch (err: any) {
         fail.push({ email, error: err.code === 'auth/email-already-in-use' ? 'Ya registrado' : err.message });
@@ -734,6 +1004,8 @@ export default function AdminPage() {
   const adminTabs = [
     { id: 'dashboard' as AdminTab, Icon: LayoutDashboard, label: 'Dashboard', badge: null as number | null },
     { id: 'config' as AdminTab, Icon: Settings, label: 'Configuración', badge: null as number | null },
+    { id: 'pantallas' as AdminTab, Icon: Monitor, label: 'Pantallas', badge: ((sedes.length + 1) * 2) as number | null },
+    { id: 'dependencias' as AdminTab, Icon: Building2, label: 'Dependencias', badge: sedes.length > 0 ? sedes.length : null as number | null },
     { id: 'funcionarios' as AdminTab, Icon: Users, label: 'Funcionarios', badge: pendingFuncionarios.length > 0 ? pendingFuncionarios.length : null },
     { id: 'directorio' as AdminTab, Icon: FileText, label: 'Base de Datos', badge: null as number | null },
     { id: 'reportes' as AdminTab, Icon: BarChart3, label: 'Reportes', badge: null as number | null },
@@ -1082,23 +1354,100 @@ export default function AdminPage() {
                 <div className={styles.kpiGrid}>
                   <div className={styles.kpiCard}>
                     <div className={styles.kpiLabel}><Users size={16} /> En Espera</div>
-                    <div className={styles.kpiValue}>{stats.enEspera}</div>
-                    <div className={styles.kpiBar} style={{ width: `${Math.min(stats.enEspera * 10, 100)}%`, background: '#3b82f6' }} />
+                    <div className={styles.kpiValue}>{analytics.enEspera}</div>
+                    <div className={styles.kpiBar} style={{ width: `${Math.min(analytics.enEspera * 10, 100)}%`, background: '#3b82f6' }} />
                   </div>
                   <div className={styles.kpiCard}>
                     <div className={styles.kpiLabel}><BarChart3 size={16} /> Atendidos Hoy</div>
-                    <div className={styles.kpiValue} style={{ color: 'var(--success)' }}>{stats.atendidosHoy}</div>
-                    <div className={styles.kpiBar} style={{ width: `${Math.min(stats.atendidosHoy * 3, 100)}%`, background: 'var(--success)' }} />
+                    <div className={styles.kpiValue} style={{ color: 'var(--success)' }}>{analytics.atendidosHoy}</div>
+                    <div className={styles.kpiBar} style={{ width: `${Math.min(analytics.atendidosHoy * 3, 100)}%`, background: 'var(--success)' }} />
                   </div>
-                  <div className={`${styles.kpiCard} ${stats.tEspera > 15 ? styles.kpiDanger : ''}`}>
+                  <div className={`${styles.kpiCard} ${analytics.tEspera > 15 ? styles.kpiDanger : ''}`}>
                     <div className={styles.kpiLabel}><Clock size={16} /> T. Espera Prom.</div>
-                    <div className={styles.kpiValue}>{stats.tEspera}<small> min</small></div>
-                    {stats.tEspera > 15 && <div className={styles.kpiAlert}><AlertTriangle size={13} /> SLA Excedido</div>}
+                    <div className={styles.kpiValue}>{analytics.tEspera}<small> min</small></div>
+                    {analytics.tEspera > 15 && <div className={styles.kpiAlert}><AlertTriangle size={13} /> SLA Excedido</div>}
                   </div>
                   <div className={styles.kpiCard}>
                     <div className={styles.kpiLabel}><Clock size={16} /> T. Atención Prom.</div>
-                    <div className={styles.kpiValue}>{stats.tAtencion}<small> min</small></div>
+                    <div className={styles.kpiValue}>{analytics.tAtencion}<small> min</small></div>
                   </div>
+                </div>
+
+                {/* ── Analítica con datos reales ── */}
+                <div className={styles.card} style={{ marginTop: '1.5rem' }}>
+                  <div className={styles.cardHead}>
+                    <Activity size={18} className={styles.cardHeadIcon} />
+                    <h2>Analítica del Sistema</h2>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '1rem' }}>
+                    <span className={styles.chip}><BarChart3 size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} /> Total turnos: {analytics.total}</span>
+                    <span className={styles.chip}>Hoy: {analytics.hoy}</span>
+                    {analytics.tendencia !== null && (
+                      <span className={styles.chip} style={{ color: analytics.tendencia >= 0 ? 'var(--success)' : 'var(--destructive)', fontWeight: 700 }}>
+                        {analytics.tendencia >= 0 ? '▲' : '▼'} {Math.abs(analytics.tendencia)}% vs semana anterior
+                      </span>
+                    )}
+                    <span className={styles.chip}><Users size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} /> Usuarios registrados: {usuariosCount}</span>
+                    <span className={styles.chip}><Building2 size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} /> Dependencias: {sedes.length + 1}</span>
+                  </div>
+
+                  {/* Turnos por día — últimos 7 días */}
+                  <h3 style={{ fontSize: '0.85rem', fontWeight: 700, margin: '0 0 0.5rem' }}>Turnos por día (últimos 7 días)</h3>
+                  <div style={{ display: 'flex', alignItems: 'stretch', gap: '0.5rem', height: '150px' }}>
+                    {(() => {
+                      const max = Math.max(...analytics.porDia.map(d => d.count), 1);
+                      return analytics.porDia.map(d => (
+                        <div key={d.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: '0.25rem' }}>
+                          <strong style={{ fontSize: '0.72rem' }}>{d.count || ''}</strong>
+                          <div
+                            title={`${d.count} turnos`}
+                            style={{
+                              width: '70%', maxWidth: '52px',
+                              height: `${Math.max((d.count / max) * 100, 2)}%`,
+                              background: d.count ? 'var(--primary)' : 'var(--surface-secondary)',
+                              borderRadius: '6px 6px 0 0', transition: 'height 0.3s'
+                            }}
+                          />
+                          <small style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{d.label}</small>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+
+                  {/* Por dependencia y por departamento */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '1.25rem' }}>
+                    <BarList title="Turnos por dependencia" items={analytics.porDependencia} color="#3b82f6" empty="Sin turnos registrados aún." />
+                    <BarList title="Departamentos más solicitados (Top 6)" items={analytics.porDepto} color="#8b5cf6" empty="Sin turnos registrados aún." />
+                  </div>
+
+                  {/* Distribución por estado */}
+                  <h3 style={{ fontSize: '0.85rem', fontWeight: 700, margin: '1.25rem 0 0.5rem' }}>Estado de los turnos</h3>
+                  {(() => {
+                    const totalE = Object.values(analytics.estados).reduce((a, b) => a + b, 0) || 1;
+                    const estadoMeta: Record<string, { label: string; color: string }> = {
+                      espera: { label: 'En espera', color: '#3b82f6' },
+                      llamado: { label: 'Llamados', color: '#f59e0b' },
+                      atendido: { label: 'Atendidos', color: '#22c55e' },
+                      saltado: { label: 'Saltados', color: '#94a3b8' },
+                    };
+                    return (
+                      <>
+                        <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', background: 'var(--surface-secondary)' }}>
+                          {Object.entries(analytics.estados).map(([k, v]) => (
+                            <div key={k} title={`${estadoMeta[k]?.label || k}: ${v}`} style={{ width: `${(v / totalE) * 100}%`, background: estadoMeta[k]?.color || '#94a3b8' }} />
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.9rem', marginTop: '0.6rem' }}>
+                          {Object.entries(analytics.estados).map(([k, v]) => (
+                            <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem' }}>
+                              <span style={{ width: 10, height: 10, borderRadius: 3, background: estadoMeta[k]?.color || '#94a3b8', display: 'inline-block' }} />
+                              {estadoMeta[k]?.label || k}: <strong>{v as number}</strong> ({Math.round(((v as number) / totalE) * 100)}%)
+                            </span>
+                          ))}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className={styles.dangerZone}>
@@ -1114,6 +1463,19 @@ export default function AdminPage() {
                   <button onClick={handleReiniciarConteo} className={styles.btnDanger}>Reiniciar a 0</button>
                 </div>
 
+                <div className={styles.dangerZone}>
+                  <div className={styles.dangerInfo}>
+                    <h3><RefreshCw size={18} /> Poner Estadísticas en 0</h3>
+                    <p>
+                      Elimina todos los turnos históricos de la institución (sede central y todas las dependencias)
+                      y deja contadores y gráficos en cero. Usuarios, funcionarios y dependencias no se afectan.
+                    </p>
+                  </div>
+                  <button onClick={handleResetStats} disabled={resettingStats} className={styles.btnDanger}>
+                    {resettingStats ? 'Procesando…' : 'Borrar Datos'}
+                  </button>
+                </div>
+
                 <div className={styles.card}>
                   <div className={styles.cardHead}>
                     <Users size={18} className={styles.cardHeadIcon} />
@@ -1127,7 +1489,7 @@ export default function AdminPage() {
                         </div>
                         <div>
                           <strong>{f.nombre}</strong>
-                          <small>{f.departamento} · Módulo {f.letra_atencion}</small>
+                          <small>{f.departamento} · Módulo {f.letra_atencion}{f.sede_id && sedes.find(s => s.id === f.sede_id) ? ` · ${sedes.find(s => s.id === f.sede_id).nombre}` : ''}</small>
                           <span className={styles.staffStatus} data-status={f.estado_funcionario || 'inactivo'}>
                             {f.estado_funcionario || 'inactivo'}
                           </span>
@@ -1171,7 +1533,10 @@ export default function AdminPage() {
 
                 <div className={styles.card} style={{ marginTop: '1.5rem' }}>
                   <div className={styles.cardHead}><Link2 size={18} className={styles.cardHeadIcon} /><h2>Enlaces Públicos</h2></div>
-                  <p className={styles.cardDesc}>Copia estas URLs en Smart TVs o Tablets.</p>
+                  <p className={styles.cardDesc}>
+                    Copia estas URLs en Smart TVs o Tablets. Estas URLs corresponden a la sede central;
+                    para ver todas las TVs y Tótems (uno por dependencia), usa la pestaña <strong>Pantallas</strong>.
+                  </p>
                   <div className={styles.formRow} style={{ marginTop: '1rem' }}>
                     <div className={styles.formGroup}>
                       <label><Monitor size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> Pantalla de TV</label>
@@ -1198,6 +1563,146 @@ export default function AdminPage() {
               </div>
             )}
 
+            {/* ── TAB: PANTALLAS (TVs y Tótems) ─────────────────────────── */}
+            {activeTab === 'pantallas' && (
+              <div className={styles.tabContent}>
+                <div className={styles.card}>
+                  <div className={styles.cardHead}>
+                    <Monitor size={18} className={styles.cardHeadIcon} />
+                    <h2>Todas las Pantallas de la Institución</h2>
+                  </div>
+                  <p className={styles.cardDesc}>
+                    {sedes.length + 1} ubicación{(sedes.length + 1) !== 1 ? 'es' : ''} × 2 pantallas = {(sedes.length + 1) * 2} dispositivos en total.
+                    Cada TV (sala de espera) y cada Tótem (autoatención) son independientes por dependencia:
+                    muestran solo los turnos de su propia fila.
+                  </p>
+                </div>
+
+                <ScreenCard
+                  nombre="Sede Central"
+                  sublabel="URLs generales de la institución"
+                  turno={instDoc?.currentTurno}
+                  ultimo={instDoc?.ultimo_reinicio}
+                  funcionarios={funcionarios.filter((f: any) => !f.sede_id).length}
+                  tvUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/tv?institution=${institutionId}`}
+                  totemUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/totem?institution=${institutionId}`}
+                  tvHref={`/tv?institution=${institutionId}`}
+                  totemHref={`/totem?institution=${institutionId}`}
+                />
+
+                {sedes.map((sede: any) => (
+                  <ScreenCard
+                    key={sede.id}
+                    nombre={sede.nombre}
+                    sublabel={sede.direccion || 'Dependencia'}
+                    turno={sede.currentTurno}
+                    ultimo={sede.ultimo_reinicio}
+                    funcionarios={funcionarios.filter((f: any) => f.sede_id === sede.id).length}
+                    tvUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/tv?institution=${institutionId}&sede=${sede.id}`}
+                    totemUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/totem?institution=${institutionId}&sede=${sede.id}`}
+                    tvHref={`/tv?institution=${institutionId}&sede=${sede.id}`}
+                    totemHref={`/totem?institution=${institutionId}&sede=${sede.id}`}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* ── TAB: DEPENDENCIAS ─────────────────────────────────────── */}
+            {activeTab === 'dependencias' && (
+              <div className={styles.tabContent}>
+                <div className={styles.card}>
+                  <div className={styles.cardHead}>
+                    <Building2 size={18} className={styles.cardHeadIcon} />
+                    <h2>{editingSedeId ? 'Editar Dependencia' : 'Nueva Dependencia'}</h2>
+                  </div>
+                  <p className={styles.cardDesc}>
+                    Cada dependencia física (sede) tiene sus propios departamentos y oficinas, su propio contador
+                    de tickets y una TV y un Tótem totalmente independientes entre sí.
+                  </p>
+                  <form onSubmit={handleSaveSede} className={styles.userForm}>
+                    <div className={styles.formRow}>
+                      <div className={styles.formGroup}>
+                        <label>Nombre de la Dependencia</label>
+                        <input type="text" value={newSedeNombre} onChange={e => setNewSedeNombre(e.target.value)} placeholder="Ej: Casa Consistorial, CESFAM Norte…" required />
+                      </div>
+                      <div className={styles.formGroup}>
+                        <label>Dirección (opcional)</label>
+                        <input type="text" value={newSedeDir} onChange={e => setNewSedeDir(e.target.value)} placeholder="Ej: Av. Aníbal Pinto 1234" />
+                      </div>
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label>Departamentos / Oficinas de esta dependencia (separados por coma)</label>
+                      <textarea rows={3} value={newSedeDeptos} onChange={e => setNewSedeDeptos(e.target.value)} placeholder="OIRS, DIDECO, OMIL, Secretaría…" />
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button type="submit" className={styles.btnPrimary} disabled={sedeSaving}>
+                        {sedeSaving ? 'Guardando…' : editingSedeId ? <>Guardar Cambios</> : <><Plus size={15} /> Crear Dependencia</>}
+                      </button>
+                      {editingSedeId && (
+                        <button type="button" className={styles.btnGhost} onClick={resetSedeForm}>Cancelar edición</button>
+                      )}
+                    </div>
+                  </form>
+                </div>
+
+                {sedes.length === 0 ? (
+                  <div className={styles.emptyState} style={{ marginTop: '1.25rem' }}>
+                    <Building2 size={36} />
+                    <p>Sin dependencias creadas. La institución opera con una sede central única (URLs genéricas de TV y Tótem).</p>
+                  </div>
+                ) : sedes.map(sede => {
+                  const tvUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/tv?institution=${institutionId}&sede=${sede.id}`;
+                  const totemUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/totem?institution=${institutionId}&sede=${sede.id}`;
+                  return (
+                    <div key={sede.id} className={styles.card} style={{ marginTop: '1rem' }}>
+                      <div className={styles.deptHeader}>
+                        <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <Building2 size={16} /> {sede.nombre}
+                        </h3>
+                        <span className={styles.deptCount}>{sede.departamentos?.length || 0} departamento{(sede.departamentos?.length || 0) !== 1 ? 's' : ''}</span>
+                      </div>
+                      {sede.direccion && (
+                        <p className={styles.cardDesc} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <MapPin size={12} /> {sede.direccion}
+                        </p>
+                      )}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', margin: '0.5rem 0 0.75rem' }}>
+                        {(sede.departamentos || []).map((d: string) => (
+                          <span key={d} className={styles.chip} data-role="funcionario">{d}</span>
+                        ))}
+                      </div>
+                      <div className={styles.formRow}>
+                        <div className={styles.formGroup}>
+                          <label><Monitor size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> TV de esta dependencia</label>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <input type="text" readOnly value={tvUrl} onClick={e => (e.target as HTMLInputElement).select()} style={{ flex: 1, cursor: 'text', background: 'var(--bg-color)' }} />
+                            <button type="button" onClick={() => navigator.clipboard.writeText(tvUrl)} className={styles.btnPrimary}>Copiar</button>
+                            <a href={`/tv?institution=${institutionId}&sede=${sede.id}`} target="_blank" rel="noopener noreferrer" className={styles.btnGhost} style={{ padding: '0 0.75rem' }}><Eye size={16} /></a>
+                          </div>
+                        </div>
+                        <div className={styles.formGroup}>
+                          <label><Tablet size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> Tótem de esta dependencia</label>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <input type="text" readOnly value={totemUrl} onClick={e => (e.target as HTMLInputElement).select()} style={{ flex: 1, cursor: 'text', background: 'var(--bg-color)' }} />
+                            <button type="button" onClick={() => navigator.clipboard.writeText(totemUrl)} className={styles.btnPrimary}>Copiar</button>
+                            <a href={`/totem?institution=${institutionId}&sede=${sede.id}`} target="_blank" rel="noopener noreferrer" className={styles.btnGhost} style={{ padding: '0 0.75rem' }}><Eye size={16} /></a>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                        <button type="button" className={styles.btnGhost} onClick={() => startEditSede(sede)}>
+                          <Pencil size={14} /> Editar
+                        </button>
+                        <button type="button" className={styles.btnDanger} onClick={() => handleDeleteSede(sede.id, sede.nombre)}>
+                          <Trash2 size={14} /> Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* ── TAB: FUNCIONARIOS ─────────────────────────────────────── */}
             {activeTab === 'funcionarios' && (
               <div className={styles.tabContent}>
@@ -1212,7 +1717,7 @@ export default function AdminPage() {
                     <div className={styles.tableWrap}>
                       <table className={styles.table}>
                         <thead>
-                          <tr><th>Nombre</th><th>Email</th><th>Cargo</th><th>Departamento</th><th>Acciones</th></tr>
+                          <tr><th>Nombre</th><th>Email</th><th>Cargo</th><th>Departamento</th><th>Dependencia</th><th>Acciones</th></tr>
                         </thead>
                         <tbody>
                           {pendingFuncionarios.map(f => (
@@ -1229,6 +1734,17 @@ export default function AdminPage() {
                                 >
                                   <option value="">Asignar depto…</option>
                                   {deptosList.map(d => <option key={d} value={d}>{d}</option>)}
+                                </select>
+                              </td>
+                              <td>
+                                <select
+                                  value={f.sede_id || ''}
+                                  onChange={e => updateFuncionario(f.id, 'sede_id', e.target.value)}
+                                  className={styles.selectField}
+                                  style={{ padding: '0.35rem 0.5rem', fontSize: '0.82rem', width: 'auto', minWidth: '130px' }}
+                                >
+                                  <option value="">Sede central</option>
+                                  {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                                 </select>
                               </td>
                               <td>
@@ -1353,6 +1869,13 @@ export default function AdminPage() {
                         </select>
                       </div>
                       <div className={styles.formGroup}>
+                        <label>Dependencia (Sede)</label>
+                        <select value={funcSede} onChange={e => setFuncSede(e.target.value)} className={styles.selectField}>
+                          <option value="">Sede central / Sin dependencia</option>
+                          {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                        </select>
+                      </div>
+                      <div className={styles.formGroup}>
                         <label>Cargo</label>
                         <input value={funcCargo} onChange={e => setFuncCargo(e.target.value)} placeholder="Ej: Psicólogo" />
                       </div>
@@ -1455,7 +1978,7 @@ export default function AdminPage() {
                       <div className={styles.tableWrap}>
                         <table className={styles.table}>
                           <thead>
-                            <tr><th>Perfil</th><th>Nombre</th><th>Cargo</th><th>Módulo</th><th>Estado</th><th>Acciones</th></tr>
+                            <tr><th>Perfil</th><th>Nombre</th><th>Cargo</th><th>Dependencia</th><th>Módulo</th><th>Estado</th><th>Acciones</th></tr>
                           </thead>
                           <tbody>
                             {funcs.map(f => (
@@ -1470,6 +1993,17 @@ export default function AdminPage() {
                                 </td>
                                 <td><input className={styles.tableInput} value={f.nombre || ''} onChange={e => updateFuncionario(f.id, 'nombre', e.target.value)} /></td>
                                 <td><input className={styles.tableInput} value={f.cargo || ''} onChange={e => updateFuncionario(f.id, 'cargo', e.target.value)} /></td>
+                                <td>
+                                  <select
+                                    value={f.sede_id || ''}
+                                    onChange={e => updateFuncionario(f.id, 'sede_id', e.target.value)}
+                                    className={styles.selectField}
+                                    style={{ padding: '0.35rem 0.5rem', fontSize: '0.82rem', width: 'auto', minWidth: '120px' }}
+                                  >
+                                    <option value="">Sede central</option>
+                                    {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                                  </select>
+                                </td>
                                 <td>
                                   <ModuleEditor
                                     funcionario={f}
@@ -1500,7 +2034,7 @@ export default function AdminPage() {
                                 </td>
                               </tr>
                             ))}
-                            {funcs.length === 0 && <tr><td colSpan={6} className={styles.noData}>Sin funcionarios en este departamento.</td></tr>}
+                            {funcs.length === 0 && <tr><td colSpan={7} className={styles.noData}>Sin funcionarios en este departamento.</td></tr>}
                           </tbody>
                         </table>
                       </div>
@@ -1559,10 +2093,10 @@ export default function AdminPage() {
                 <div className={styles.card} style={{ marginTop: '1.5rem' }}>
                   <div className={styles.cardHead}><BarChart3 size={18} className={styles.cardHeadIcon} /><h2>Métricas en Tiempo Real</h2></div>
                   <div className={styles.metricsGrid}>
-                    <div className={styles.metricItem}><span className={styles.metricVal}>{stats.enEspera}</span><span className={styles.metricLabel}>En Espera</span></div>
-                    <div className={styles.metricItem}><span className={styles.metricVal} style={{ color: 'var(--success)' }}>{stats.atendidosHoy}</span><span className={styles.metricLabel}>Atendidos Hoy</span></div>
-                    <div className={styles.metricItem}><span className={styles.metricVal} style={{ color: stats.tEspera > 15 ? 'var(--destructive)' : 'var(--primary)' }}>{stats.tEspera} min</span><span className={styles.metricLabel}>Espera Prom.</span></div>
-                    <div className={styles.metricItem}><span className={styles.metricVal}>{stats.tAtencion} min</span><span className={styles.metricLabel}>Atención Prom.</span></div>
+                    <div className={styles.metricItem}><span className={styles.metricVal}>{analytics.enEspera}</span><span className={styles.metricLabel}>En Espera</span></div>
+                    <div className={styles.metricItem}><span className={styles.metricVal} style={{ color: 'var(--success)' }}>{analytics.atendidosHoy}</span><span className={styles.metricLabel}>Atendidos Hoy</span></div>
+                    <div className={styles.metricItem}><span className={styles.metricVal} style={{ color: analytics.tEspera > 15 ? 'var(--destructive)' : 'var(--primary)' }}>{analytics.tEspera} min</span><span className={styles.metricLabel}>Espera Prom.</span></div>
+                    <div className={styles.metricItem}><span className={styles.metricVal}>{analytics.tAtencion} min</span><span className={styles.metricLabel}>Atención Prom.</span></div>
                     <div className={styles.metricItem}><span className={styles.metricVal}>{funcionarios.filter(f => f.estado_funcionario === 'activo').length}</span><span className={styles.metricLabel}>Activos</span></div>
                     <div className={styles.metricItem}><span className={styles.metricVal}>{deptosList.length}</span><span className={styles.metricLabel}>Departamentos</span></div>
                   </div>

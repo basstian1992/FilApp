@@ -14,6 +14,12 @@ service cloud.firestore {
       allow update, delete: if request.auth != null;
     }
 
+    // ── Sedes / Dependencias físicas de una institución: lectura pública (TV/Tótem), escritura autenticada ──
+    match /sedes/{docId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null;
+    }
+
     // ── Turnos: lectura pública (TV/Tótem), escritura autenticada ──
     match /turnos/{docId} {
       allow read: if true;
@@ -21,7 +27,10 @@ service cloud.firestore {
       allow update, delete: if request.auth != null;
     }
 
-    // ── Usuarios: solo usuarios autenticados ──
+    // ── Usuarios: base ESTANDARIZADA por institución (clave = RUT, etiqueta
+    //    institution_id; compartida por todas las dependencias). Solo clientes
+    //    autenticados (paneles). Las pantallas públicas (TV/Tótem) acceden vía
+    //    /api/usuarios con credenciales de administrador del servidor. ──
     match /usuarios/{docId} {
       allow read, write: if request.auth != null;
     }

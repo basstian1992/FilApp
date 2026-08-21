@@ -226,7 +226,7 @@ El sistema se integra con **CallMeBot** para enviar mensajes WhatsApp al funcion
 | Problema | Causa | Solución |
 |---|---|---|
 | No llegan WhatsApp | API Key incorrecta o número mal formateado | Verifique en CallMeBot, use formato 569XXXXXXXX |
-| La TV no muestra pacientes | `usuarios` requiere auth | El RUT se muestra si está en el turno; el nombre requiere iniciar sesión |
+| La TV no muestra el nombre del paciente | El ciudadano no está registrado con nombre en la base de usuarios | La TV nunca muestra RUT (privacidad): si el usuario está registrado muestra su nombre; si no, solo el ticket |
 | Tótem no avanza | Error de conexión a Firestore | Verifique conexión a internet, recargue la página |
 | Funcionario no ve turnos | Índice compuesto faltante | Revise Firebase Console → Firestore → Índices |
 | Error "Too many requests" | Límite de CallMeBot excedido | Espere 1 minuto antes de enviar más mensajes |

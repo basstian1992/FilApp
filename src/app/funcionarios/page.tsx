@@ -48,6 +48,7 @@ interface Funcionario {
   role: string;
   nombre: string;
   departamento: string;
+  sede_id?: string;
   cargo?: string;
   estado_funcionario?: string;
   avatar_url?: string;
@@ -108,6 +109,7 @@ export default function StaffPage() {
   const [resetLogs, setResetLogs] = useState<any[]>([]);
   const [instLogo, setInstLogo] = useState('');
   const [instName, setInstName] = useState('');
+  const [sedeNombre, setSedeNombre] = useState('');
 
   // WhatsApp states
   const [whatsappPhone, setWhatsappPhone] = useState('');
@@ -179,6 +181,22 @@ export default function StaffPage() {
       return () => unsub();
     }
   }, [funcionario?.institution_id]);
+
+  // Nombre de la dependencia (sede) asignada al funcionario
+  useEffect(() => {
+    if (!funcionario?.sede_id) return;
+    const unsub = onSnapshot(doc(db, 'sedes', funcionario.sede_id), (docSnap) => {
+      setSedeNombre(docSnap.exists() ? (docSnap.data().nombre || '') : '');
+    });
+    return () => { unsub(); setSedeNombre(''); };
+  }, [funcionario?.sede_id]);
+
+  // Un turno pertenece a la cola del funcionario solo si coincide su dependencia:
+  // con sede asignada → solo turnos de esa sede; sin sede → solo turnos sin dependencia
+  const matchesSede = (t: any) => {
+    const fs = funcionarioRef.current?.sede_id || '';
+    return fs ? t.sede_id === fs : !t.sede_id;
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -273,6 +291,20 @@ export default function StaffPage() {
     }
   };
 
+  // Latido de presencia: marca `last_seen` cada 30 s. El auto-cierre usa este
+  // dato para saber que el funcionario está en línea y NO devolver sus turnos
+  // activos a la fila (una consulta larga no se interrumpe).
+  useEffect(() => {
+    const id = funcionario?.id;
+    if (!id) return;
+    const beat = () => {
+      updateDoc(doc(db, 'especialistas', id), { last_seen: new Date().toISOString() }).catch(() => {});
+    };
+    beat();
+    const iv = setInterval(beat, 30000);
+    return () => clearInterval(iv);
+  }, [funcionario?.id]);
+
   const sendWa = (phone: string, key: string, msg: string) => {
     if (whatsappPending.has(phone)) {
       // Check if the pending entry is stale (>20s) — prevents blocking from previous session
@@ -332,8 +364,8 @@ export default function StaffPage() {
       const allDocs = snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as any));
 
       const filtered = currentFunc
-        ? allDocs.filter((d: any) => d.departamento_solicitado === currentFunc.departamento)
-        : allDocs;
+        ? allDocs.filter((d: any) => d.departamento_solicitado === currentFunc.departamento && matchesSede(d))
+        : allDocs.filter((d: any) => matchesSede(d));
 
       filtered.sort((a: any, b: any) => {
         const pa = a.priority_level ?? (a.priority ? 2 : 0);
@@ -351,7 +383,7 @@ export default function StaffPage() {
         snap.docChanges().forEach((change: any) => {
           if (change.type === 'added') {
             const newTurno = change.doc.data();
-            if (currentFunc && currentFunc.departamento === newTurno.departamento_solicitado) {
+            if (currentFunc && currentFunc.departamento === newTurno.departamento_solicitado && matchesSede(newTurno)) {
               const queueCount = filtered.length;
               const ticketStr = `${newTurno.letra_ticket || 'T'}-${newTurno.numero}`;
               const deptoStr = newTurno.departamento_solicitado || currentFunc.departamento;
@@ -409,8 +441,8 @@ export default function StaffPage() {
         const currentFunc = funcionarioRef.current;
         const allDocs = snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as any));
         const filtered = currentFunc
-          ? allDocs.filter((d: any) => d.departamento_solicitado === currentFunc.departamento)
-          : allDocs;
+          ? allDocs.filter((d: any) => d.departamento_solicitado === currentFunc.departamento && matchesSede(d))
+          : allDocs.filter((d: any) => matchesSede(d));
         filtered.sort((a: any, b: any) => {
           const pa = a.priority_level ?? (a.priority ? 2 : 0);
           const pb = b.priority_level ?? (b.priority ? 2 : 0);
@@ -694,16 +726,18 @@ export default function StaffPage() {
       }
 
       const instRef = doc(db, 'institutions', instId);
+      // Con dependencia asignada el contador de tickets vive en el doc de la sede
+      const counterRef = funcionario.sede_id ? doc(db, 'sedes', funcionario.sede_id) : instRef;
       const turnoRef = doc(collection(db, 'turnos'));
 
       const result = await runTransaction(db, async (transaction) => {
-        const instDoc = await transaction.get(instRef);
+        const counterDoc = await transaction.get(counterRef);
         const santiagoNowStr = new Date().toLocaleString("en-US", {timeZone: "America/Santiago"});
         const nowSCL = new Date(santiagoNowStr);
         const resetTimeSCL = new Date(nowSCL.getFullYear(), nowSCL.getMonth(), nowSCL.getDate(), 7, 0, 0, 0);
 
-        let currentNumero = instDoc.data()?.currentTurno || 0;
-        let lastReset = instDoc.data()?.ultimo_reinicio || null;
+        let currentNumero = counterDoc.data()?.currentTurno || 0;
+        let lastReset = counterDoc.data()?.ultimo_reinicio || null;
         let shouldReset = false;
 
         if (nowSCL >= resetTimeSCL) {
@@ -728,12 +762,13 @@ export default function StaffPage() {
         }
 
         const newNumero = currentNumero + 1;
-        transaction.update(instRef, { currentTurno: newNumero, ultimo_reinicio: lastReset });
+        transaction.update(counterRef, { currentTurno: newNumero, ultimo_reinicio: lastReset });
 
         const letraTicket = funcionario.letra_atencion || funcionario.departamento.charAt(0).toUpperCase();
 
         transaction.set(turnoRef, {
           institution_id: instId,
+          sede_id: funcionario.sede_id || null,
           numero: newNumero,
           letra_ticket: letraTicket,
           departamento_solicitado: funcionario.departamento,
@@ -792,7 +827,7 @@ export default function StaffPage() {
 
     const docsList = nextSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
     const esperaDocs = docsList.filter(
-      d => d.departamento_solicitado === funcionario.departamento
+      d => d.departamento_solicitado === funcionario.departamento && matchesSede(d)
     );
 
     if (esperaDocs.length === 0) {
@@ -1084,6 +1119,11 @@ export default function StaffPage() {
             <div className={styles.instBadge}>
               <span className={styles.instNameSmall}>{instName}</span>
             </div>
+            {sedeNombre && (
+              <div className={styles.instBadge}>
+                <span className={styles.instNameSmall}>📍 {sedeNombre}</span>
+              </div>
+            )}
             <div className={styles.metaChips}>
               {funcionario?.cargo && <span className={styles.chip}>{funcionario.cargo}</span>}
               {funcionario?.departamento && <span className={styles.chip} data-variant="dept">{funcionario.departamento}</span>}
@@ -1174,7 +1214,7 @@ export default function StaffPage() {
 
           {funcionario?.institution_id && (
             <a
-              href={`/tv?institution=${funcionario.institution_id}`}
+              href={`/tv?institution=${funcionario.institution_id}${funcionario.sede_id ? `&sede=${funcionario.sede_id}` : ''}`}
               target="_blank"
               rel="noopener noreferrer"
               className={styles.tvBtn}

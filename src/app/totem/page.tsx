@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import styles from './totem.module.css';
 import { db } from '@/lib/firebase/client';
-import { collection, doc, runTransaction, setDoc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, runTransaction, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { triggerWebhook } from '@/lib/notify';
 import { Maximize2, Minimize2 } from 'lucide-react';
 
@@ -60,6 +60,7 @@ function FullscreenToggle() {
 function TotemInner() {
   const searchParams = useSearchParams();
   const institutionId = searchParams.get('institution');
+  const sedeId = searchParams.get('sede');
 
   const [screen, setScreen] = useState<Screen>('menu');
   const [selectedMode, setSelectedMode] = useState<'general' | 'oirs' | 'appointment' | null>(null);
@@ -77,14 +78,17 @@ function TotemInner() {
   const [oirsDepartamento, setOirsDepartamento] = useState('OIRS');
   const [totemLogoUrl, setTotemLogoUrl] = useState('');
   const [totemInstName, setTotemInstName] = useState('');
+  const [sedeNombre, setSedeNombre] = useState('');
   const [configLoaded, setConfigLoaded] = useState(false);
 
   const institutionIdRef = useRef(institutionId);
+  const sedeIdRef = useRef(sedeId);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     institutionIdRef.current = institutionId;
-  }, [institutionId]);
+    sedeIdRef.current = sedeId;
+  }, [institutionId, sedeId]);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -98,7 +102,18 @@ function TotemInner() {
           setOirsDepartamento(config.oirs_departamento || 'OIRS');
           setTotemLogoUrl(config.logo_url || data.config?.logo_url || '');
           setTotemInstName(data.name || '');
-          setConfigLoaded(true);
+        }
+
+        // Dependencia (sede): sus propios departamentos y nombre
+        let effectiveSedeId = '';
+        if (sedeId) {
+          const sedeSnap = await getDoc(doc(db, 'sedes', sedeId));
+          if (sedeSnap.exists() && sedeSnap.data()?.institution_id === institutionId) {
+            const sedeData = sedeSnap.data();
+            effectiveSedeId = sedeId;
+            if (sedeData.departamentos?.length) setCategories(sedeData.departamentos);
+            setSedeNombre(sedeData.nombre || '');
+          }
         }
 
         const funcSnap = await getDocs(query(
@@ -106,21 +121,24 @@ function TotemInner() {
           where('institution_id', '==', institutionId),
           where('role', '==', 'funcionario')
         ));
-        // Only show approved (non-pending) funcionarios for appointment selection
+        // Only show approved (non-pending) funcionarios for appointment selection,
+        // restricted to this dependencia when one is selected
         setFuncionarios(
           funcSnap.docs
             .map(d => ({ id: d.id, ...d.data() } as any))
             .filter(f => f.estado_funcionario !== 'pendiente')
+            .filter(f => !effectiveSedeId || f.sede_id === effectiveSedeId)
         );
       } catch (e) {
         console.error(e);
         setCategories(['Atención General']);
+      } finally {
         setConfigLoaded(true);
       }
     };
     fetchConfig();
     return () => { if (resetTimerRef.current) clearTimeout(resetTimerRef.current); };
-  }, [institutionId]);
+  }, [institutionId, sedeId]);
 
   // ── Fullscreen (kiosko) ──────────────────────────────────────────────────
   const resetFlow = () => {
@@ -189,27 +207,30 @@ function TotemInner() {
 
   const handleOirsDirect = async () => {
     const instId = institutionIdRef.current;
+    const currentSedeId = sedeIdRef.current;
     if (!instId) return;
     setLoading(true);
     setErrorMsg('');
     try {
       const instRef = doc(db, 'institutions', instId);
+      // Con dependencia seleccionada el contador de tickets vive en el doc de la sede
+      const counterRef = currentSedeId ? doc(db, 'sedes', currentSedeId) : instRef;
       const turnoRef = doc(collection(db, 'turnos'));
       let newNumero = 1;
       const departamento = oirsDepartamento;
       let letraTicket = departamento.charAt(0).toUpperCase();
       const result = await runTransaction(db, async (transaction) => {
-        const instDoc = await transaction.get(instRef);
+        const counterDoc = await transaction.get(counterRef);
         const santiagoNowStr = new Date().toLocaleString("en-US", {timeZone: "America/Santiago"});
         const nowSCL = new Date(santiagoNowStr);
         const resetTimeSCL = new Date(nowSCL.getFullYear(), nowSCL.getMonth(), nowSCL.getDate(), 7, 0, 0, 0);
         let currentNumero = 0;
         let lastReset = null;
-        if (!instDoc.exists()) {
-          transaction.set(instRef, { currentTurno: 0, ultimo_reinicio: null }, { merge: true });
+        if (!counterDoc.exists()) {
+          transaction.set(counterRef, { currentTurno: 0, ultimo_reinicio: null }, { merge: true });
         } else {
-          currentNumero = instDoc.data()?.currentTurno || 0;
-          lastReset = instDoc.data()?.ultimo_reinicio || null;
+          currentNumero = counterDoc.data()?.currentTurno || 0;
+          lastReset = counterDoc.data()?.ultimo_reinicio || null;
         }
         let shouldReset = false;
         if (nowSCL >= resetTimeSCL) {
@@ -229,9 +250,10 @@ function TotemInner() {
         }
         if (shouldReset) { currentNumero = 0; lastReset = new Date().toISOString(); }
         newNumero = currentNumero + 1;
-        transaction.update(instRef, { currentTurno: newNumero, ultimo_reinicio: lastReset });
+        transaction.update(counterRef, { currentTurno: newNumero, ultimo_reinicio: lastReset });
         transaction.set(turnoRef, {
           institution_id: instId,
+          sede_id: currentSedeId || null,
           numero: newNumero,
           letra_ticket: letraTicket,
           departamento_solicitado: departamento,
@@ -256,6 +278,7 @@ function TotemInner() {
 
   const handleSubmit = async (overrideCategory?: string, overrideFuncionario?: any) => {
     const instId = institutionIdRef.current;
+    const currentSedeId = sedeIdRef.current;
     if (!rut || !instId) return;
 
     const formattedRut = formatRutUI(rut);
@@ -269,16 +292,32 @@ function TotemInner() {
     setErrorMsg('');
 
     try {
-      const userRef = doc(db, 'usuarios', formattedRut);
-      const userSnap = await getDoc(userRef);
+      // Base de usuarios estandarizada por institución (compartida por todas las
+      // dependencias). Se consulta vía servidor para mantener `usuarios` protegida
+      // por reglas de autenticación; el alta del RUT la hace /api/usuarios.
       let nombrePaciente = '';
-      if (userSnap.exists()) {
-        nombrePaciente = userSnap.data().nombre_completo || '';
-      } else {
-        await setDoc(userRef, { rut: formattedRut, institution_id: instId, created_at: new Date().toISOString() }, { merge: true });
+      try {
+        const lookupRes = await fetch('/api/usuarios', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rut: formattedRut,
+            institutionId: instId,
+            sedeId: currentSedeId || undefined,
+            createIfMissing: true,
+          }),
+        });
+        const lookupData = await lookupRes.json();
+        if (lookupData.success && lookupData.exists) {
+          nombrePaciente = lookupData.nombre_completo || '';
+        }
+      } catch (lookupErr) {
+        console.error('No se pudo consultar/crear el usuario:', lookupErr);
       }
 
       const instRef = doc(db, 'institutions', instId);
+      // Con dependencia seleccionada el contador de tickets vive en el doc de la sede
+      const counterRef = currentSedeId ? doc(db, 'sedes', currentSedeId) : instRef;
       const turnoRef = doc(collection(db, 'turnos'));
 
       let newNumero = 1;
@@ -288,7 +327,7 @@ function TotemInner() {
       const finalFunc = overrideFuncionario || selectedFuncionario;
 
       const result = await runTransaction(db, async (transaction) => {
-        const instDoc = await transaction.get(instRef);
+        const counterDoc = await transaction.get(counterRef);
         const santiagoNowStr = new Date().toLocaleString("en-US", {timeZone: "America/Santiago"});
         const nowSCL = new Date(santiagoNowStr);
         const resetTimeSCL = new Date(nowSCL.getFullYear(), nowSCL.getMonth(), nowSCL.getDate(), 7, 0, 0, 0);
@@ -296,11 +335,11 @@ function TotemInner() {
         let currentNumero = 0;
         let lastReset = null;
 
-        if (!instDoc.exists()) {
-          transaction.set(instRef, { currentTurno: 0, ultimo_reinicio: null }, { merge: true });
+        if (!counterDoc.exists()) {
+          transaction.set(counterRef, { currentTurno: 0, ultimo_reinicio: null }, { merge: true });
         } else {
-          currentNumero = instDoc.data()?.currentTurno || 0;
-          lastReset = instDoc.data()?.ultimo_reinicio || null;
+          currentNumero = counterDoc.data()?.currentTurno || 0;
+          lastReset = counterDoc.data()?.ultimo_reinicio || null;
         }
 
         let shouldReset = false;
@@ -329,7 +368,7 @@ function TotemInner() {
         }
 
         newNumero = currentNumero + 1;
-        transaction.update(instRef, { currentTurno: newNumero, ultimo_reinicio: lastReset });
+        transaction.update(counterRef, { currentTurno: newNumero, ultimo_reinicio: lastReset });
 
         const departamento = selectedMode === 'oirs'
           ? oirsDepartamento
@@ -344,6 +383,7 @@ function TotemInner() {
 
         transaction.set(turnoRef, {
           institution_id: instId,
+          sede_id: currentSedeId || null,
           numero: newNumero,
           letra_ticket: letraTicket,
           departamento_solicitado: departamento,
@@ -434,7 +474,7 @@ function TotemInner() {
         <div className={styles.glassPanel}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', justifyContent: 'center', marginBottom: '0.5rem' }}>
             {totemLogoUrl && <img src={totemLogoUrl} alt="Logo" style={{ height: '60px', width: 'auto', borderRadius: '12px' }} />}
-            {totemInstName && <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>{totemInstName}</span>}
+            {totemInstName && <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>{totemInstName}{sedeNombre ? ` · ${sedeNombre}` : ''}</span>}
           </div>
           <h1 className={styles.title}>Bienvenido</h1>
           <p className={styles.subtitle}>Seleccione el tipo de atención que necesita</p>
